@@ -6,8 +6,9 @@ import json
 from tqdm import tqdm
 from sklearn.model_selection import StratifiedKFold
 import argparse
+# from DataReader import DataReader
 
-from nltk.corpus import wordnet
+# from nltk.corpus import wordnet
 
 nltk.download('stopwords')
 # nltk.download('wordnet')
@@ -384,10 +385,10 @@ if __name__ == '__main__':
     Ks = 0.1 + np.linspace(0, 0.7, 8)
 
     # tune the exponent and train the model on best value
-    print('Tuning paramaters and training model...')
+    print('Tuning parameters and training model...')
     tuner = ParameterTuner()
     X, y = training.get_data()
-    r = tuner.tune(X,y, Ks)
+    r = tuner.tune(X, y, Ks)
 
     # test the model on the
     print('Predicting labels for test data from: {}'.format(args.test_path))
