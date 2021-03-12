@@ -6,15 +6,16 @@ import json
 from tqdm import tqdm
 from sklearn.model_selection import StratifiedKFold
 import argparse
+
 # from utils.DataReader import DataReader
 
 # from nltk.corpus import wordnet
 
 nltk.download('stopwords')
-# nltk.download('wordnet')
+nltk.download('wordnet')
 SEED = 31415
 np.random.seed(SEED)
-#
+
 more_stop_words = ['could', "he'd", "he'll", "he's", "here's", "how's", "i'd", "i'll", "i'm", "i've", "let's", 'ought',
                    "she'd", "she'll", "that's", "there's", "they'd", "they'll", "they're", "they've", "we'd", "we'll",
                    "we're", "we've", "what's", "when's", "where's", "who's", "why's", 'would']
@@ -58,7 +59,6 @@ class CompoundTokenizer:
         tokens = self.tokenizer.tokenize(document_str.lower())
         # remove stop words
         filtered_words = [w for w in tokens if w not in self.stop_words]
-        # Mapping synonyms together:
 
         # stem
         stemmed = [self.stemmer.stem(w) for w in filtered_words]
@@ -78,6 +78,7 @@ class VectorModel:
         self.idfs = None
         self.weights = None
         self.k = k
+        self.drop_percentile = 3
 
     def get_doc_tf(self, path):
         """
@@ -135,7 +136,9 @@ class VectorModel:
             # normalizing per document & store in a list
             self.weights.append(self.normalize_dict(doc_weights))
 
-        self.drop_low_weights()
+        # drop lowest weights by percentile
+        self.drop_low_weights(percentile=self.drop_percentile)
+
     #    if self.IR:
     # inverse indices
     #      self.vocab = {}
@@ -145,6 +148,23 @@ class VectorModel:
     #          if word in d.keys():
     #            weight = weights[index][word]
     #            self.vocab[word].append({'id':index, 'w': weight})
+
+    @staticmethod
+    def unique(list1):
+        # intilize a null list
+        unique_list = []
+        # traverse for all elements
+        for x in list1:
+            # check if exists in unique_list or not
+            if x not in unique_list:
+                unique_list.append(x)
+        return unique_list
+
+    def get_n_synonyms(self, word, top_n=-1):
+        # Then, we're going to use the term "program" to find synsets like so:
+        synonyms = wordnet.synsets(word)
+        synonyms = [syn.lemmas()[0].name() for syn in synonyms]
+        return self.unique(synonyms)[:top_n]
 
     def drop_low_weights(self, percentile=3):
         weights = [list(doc_weight.values()) for doc_weight in self.weights]
