@@ -6,7 +6,7 @@ import json
 from tqdm import tqdm
 from sklearn.model_selection import StratifiedKFold
 import argparse
-# from DataReader import DataReader
+# from utils.DataReader import DataReader
 
 # from nltk.corpus import wordnet
 
