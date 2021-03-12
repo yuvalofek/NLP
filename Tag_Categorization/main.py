@@ -10,13 +10,14 @@ import argparse
 from nltk.corpus import wordnet
 
 nltk.download('stopwords')
-#nltk.download('wordnet')
+# nltk.download('wordnet')
 SEED = 31415
 np.random.seed(SEED)
 #
-more_stop_words = ['could', "he'd", "he'll","he's","here's","how's", "i'd", "i'll", "i'm", "i've", "let's", 'ought',
+more_stop_words = ['could', "he'd", "he'll", "he's", "here's", "how's", "i'd", "i'll", "i'm", "i've", "let's", 'ought',
                    "she'd", "she'll", "that's", "there's", "they'd", "they'll", "they're", "they've", "we'd", "we'll",
                    "we're", "we've", "what's", "when's", "where's", "who's", "why's", 'would']
+
 
 class DataReader:
     """
@@ -149,7 +150,7 @@ class VectorModel:
         weights = np.array([item for sublist in weights for item in sublist])
         min_weight = np.percentile(weights, percentile, interpolation='midpoint')
         for idx, document_weight in enumerate(self.weights):
-            self.weights[idx]= {word:weight for word, weight in self.weights[idx].items() if weight>min_weight}
+            self.weights[idx] = {word: weight for word, weight in self.weights[idx].items() if weight > min_weight}
 
     def get_test_weights(self, doc_paths):
         """
@@ -375,22 +376,22 @@ if __name__ == '__main__':
     # Get arguments
     args = get_args()
 
-    #read in the training labels file
+    # read in the training labels file
     training = DataReader(args.input_path)
     print('Training data obtained from: {}'.format(args.input_path))
 
     # hyper-parameter tuning - idf exponent in TF-IDF weights (weight = tf*(idf**k))
     Ks = 0.1 + np.linspace(0, 0.7, 8)
 
-    #tune the exponent and train the model on best value
+    # tune the exponent and train the model on best value
     print('Tuning paramaters and training model...')
     tuner = ParameterTuner()
     X, y = training.get_data()
-    r = tuner.tune(X, y, Ks)
+    r = tuner.tune(X,y, Ks)
 
     # test the model on the
     print('Predicting labels for test data from: {}'.format(args.test_path))
     testing = DataReader(args.test_path)
     X_te, _ = testing.get_data()
     r.test(X_te, write_out=True, write_path=args.output_path)
-    print('Ouput saved to: {}'.format(args.output_path))
+    print('Output saved to: {}'.format(args.output_path))
