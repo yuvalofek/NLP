@@ -1,5 +1,6 @@
 import nltk
 from collections import Counter
+from collections import defaultdict
 import numpy as np
 import pandas as pd
 import json
@@ -9,7 +10,7 @@ import argparse
 
 # from utils.DataReader import DataReader
 
-# from nltk.corpus import wordnet
+from nltk.corpus import wordnet
 
 nltk.download('stopwords')
 nltk.download('wordnet')
@@ -70,17 +71,73 @@ class CompoundTokenizer:
         # lemmantized.extend(bi_gram)
         return stemmed
 
+class CommonOperations:
+    """
+    Operations I used across classes and thought it would be useful to store together
+    """
+    @staticmethod
+    def unique(list1):
+        # intilize a null list
+        unique_list = []
+        # traverse for all elements
+        for x in list1:
+            # check if exists in unique_list or not
+            if x not in unique_list:
+                unique_list.append(x)
+        return unique_list
 
-class VectorModel:
+    @staticmethod
+    def normalize_dict(dict1):
+        """
+        normalize the values of the dictionary to have norm 1
+        """
+        norm = np.sqrt(np.sum(np.array(list(dict1.values())) ** 2))
+        d = {key: value / norm for key, value in dict1.items()}
+        return d
+
+    @staticmethod
+    def argmax(lst):
+        # In terms of equality, we pick the first time the max was reached
+        argument_max = -1
+        max_v = -1
+        for i, l in enumerate(lst):
+            if l > max_v:
+                argument_max = i
+                max_v = l
+        return argument_max
+
+class VectorModel(CommonOperations):
     def __init__(self, comp_tokenizer, k):
         # token creating
+        self.synonym_map = defaultdict(list)
         self.complex_tokenizer = comp_tokenizer
         self.idfs = None
         self.weights = None
         self.k = k
         self.drop_percentile = 3
 
-    def get_doc_tf(self, path):
+    '''
+    @staticmethod
+    def normalize_dict(dict1):
+        """
+        normalize the values of the dictionary to have norm 1
+        """
+        norm = np.sqrt(np.sum(np.array(list(dict1.values())) ** 2))
+        d = {key: value / norm for key, value in dict1.items()}
+        return d
+    
+    @staticmethod
+    def unique(list1):
+        # intilize a null list
+        unique_list = []
+        # traverse for all elements
+        for x in list1:
+            # check if exists in unique_list or not
+            if x not in unique_list:
+                unique_list.append(x)
+        return unique_list
+    '''
+    def get_doc_tf(self, path, use_synonyms = False):
         """
         Reads in a document and returns its term frequencies
         :param path: document path
@@ -92,21 +149,15 @@ class VectorModel:
             value = f.read()
         # tokenize
         tokens = self.complex_tokenizer(value)
+        if use_synonyms:
+            for idx, token in enumerate(tokens):
+                tokens[idx] = self.synonym_map.get(token)
         # count the occurrences of each word
         word_counts = dict(Counter(tokens))
         num_tokens = len(tokens)
         # Get TF
         tf = {key: 1 + np.log(word_count / num_tokens) for key, word_count in word_counts.items()}
         return tf
-
-    @staticmethod
-    def normalize_dict(dict1):
-        """
-        normalize the values of the dictionary to have norm 1
-        """
-        norm = np.sqrt(np.sum(np.array(list(dict1.values())) ** 2))
-        d = {key: value / norm for key, value in dict1.items()}
-        return d
 
     def set_weights(self, doc_paths):
         """
@@ -139,26 +190,47 @@ class VectorModel:
         # drop lowest weights by percentile
         self.drop_low_weights(percentile=self.drop_percentile)
 
-    #    if self.IR:
-    # inverse indices
-    #      self.vocab = {}
-    #      for word in idfs.keys():
-    #        self.vocab[word] = []
-    #        for index, d in enumerate(corp_TFs):
-    #          if word in d.keys():
-    #            weight = weights[index][word]
-    #            self.vocab[word].append({'id':index, 'w': weight})
+        # map synonyms of words in input vocabulary to the words in the vocabulary
+        # self.map_synonyms()
 
-    @staticmethod
-    def unique(list1):
-        # intilize a null list
-        unique_list = []
-        # traverse for all elements
-        for x in list1:
-            # check if exists in unique_list or not
-            if x not in unique_list:
-                unique_list.append(x)
-        return unique_list
+
+    def map_synonyms(self):
+        # create a dict of synonym to word mappings
+        for word in self.idfs.keys():
+            # get the synonyms
+            synonyms = self.get_n_synonyms(word)
+            # if we have synonyms
+            if synonyms is not None or not synonyms:
+                # append to list in case multiple words have the same synonyms
+                for synonym in synonyms:
+                    self.synonym_map[synonym].append(word)
+
+        for word in self.idfs.keys():
+            # words in the input vocabulary should always map to themselves
+            self.synonym_map[word] = [word]
+
+        # in case multiple words in our test docs have the same synonyms, set the synonyms to map to the words
+        # with the lowest idf --> least influence our results
+        for synonym, words in self.synonym_map.items():
+            # if multiple words in the input vocab map to the same synonym
+            if len(words) > 1:
+                word_weights = []
+                for word in words:
+                    word_weights.append(self.idfs[word])
+                self.synonym_map[synonym] = words[self.argmax(word_weights)]
+            # if the synonyms map to one word
+            elif len(words) == 1:
+                self.synonym_map[synonym] = words[0]
+
+    def get_inverse_weights(self, corp_tfs):
+        vocab = {}
+        for word in self.idfs.keys():
+            vocab[word] = []
+            for index, d in enumerate(corp_tfs):
+                if word in d.keys():
+                    weight = self.weights[index][word]
+                    vocab[word].append({'id': index, 'w': weight})
+        return vocab
 
     def get_n_synonyms(self, word, top_n=-1):
         # Then, we're going to use the term "program" to find synsets like so:
@@ -182,7 +254,7 @@ class VectorModel:
         """
         # check that we have the trained idfs
         assert (self.idfs is not None)
-        tfs = [self.get_doc_tf(doc) for doc in doc_paths]
+        tfs = [self.get_doc_tf(doc, use_synonyms=False) for doc in doc_paths]
 
         test_weights = []
         for doc_TFs in tfs:
@@ -402,11 +474,13 @@ if __name__ == '__main__':
     print('Training data obtained from: {}'.format(args.input_path))
 
     # hyper-parameter tuning - idf exponent in TF-IDF weights (weight = tf*(idf**k))
-    Ks = 0.1 + np.linspace(0, 0.7, 8)
+    N_exponents = 2
+    k_fold = 2
 
+    Ks = 0.1 + np.linspace(0, 0.7, N_exponents)
     # tune the exponent and train the model on best value
     print('Tuning parameters and training model...')
-    tuner = ParameterTuner()
+    tuner = ParameterTuner(k_fold=k_fold)
     X, y = training.get_data()
     r = tuner.tune(X, y, Ks)
 
