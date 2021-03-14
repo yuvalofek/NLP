@@ -336,19 +336,6 @@ class Rocchio(CommonOperations):
             # normalize
             self.category_weights[label] = self.normalize_dict(self.category_weights[label] )
 
-    @staticmethod
-    def dict_cos_sim(dict1, dict2):
-        dict_smaller = dict1 if len(dict1) < len(dict2) else dict2
-        dict_bigger = dict2 if len(dict1) < len(dict2) else dict1
-        # since weight vectors are normalized, we only need to take the inner
-        # product, which is the sum of products of the vector elements
-        similarity = 0
-        for key, value in dict_smaller.items():
-            # get key in bigger dict if exists, else zero and multiply by val in
-            # smaller dict
-            similarity += (dict_bigger.get(key, 0.0) * value) ** 0.5
-        return similarity
-
     def test(self, doc_paths, write_out=False, write_path='./output.labels'):
         # calculate the document weights
         vm_weights = self.vm.get_test_weights(doc_paths)
@@ -363,6 +350,19 @@ class Rocchio(CommonOperations):
         if write_out:
             self.write_out(doc_paths, predictions, write_path)
         return predictions
+
+    @staticmethod
+    def dict_cos_sim(dict1, dict2):
+        dict_smaller = dict1 if len(dict1) < len(dict2) else dict2
+        dict_bigger = dict2 if len(dict1) < len(dict2) else dict1
+        # since weight vectors are normalized, we only need to take the inner
+        # product, which is the sum of products of the vector elements
+        similarity = 0
+        for key, value in dict_smaller.items():
+            # get key in bigger dict if exists, else zero and multiply by val in
+            # smaller dict
+            similarity += (dict_bigger.get(key, 0.0) * value) ** 0.5
+        return similarity
 
     @staticmethod
     def write_out(doc_paths, predictions, write_path):
