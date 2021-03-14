@@ -71,10 +71,12 @@ class CompoundTokenizer:
         # lemmantized.extend(bi_gram)
         return stemmed
 
+
 class CommonOperations:
     """
     Operations I used across classes and thought it would be useful to store together
     """
+
     @staticmethod
     def unique(list1):
         # intilize a null list
@@ -105,6 +107,7 @@ class CommonOperations:
                 argument_max = i
                 max_v = l
         return argument_max
+
 
 class VectorModel(CommonOperations):
     def __init__(self, comp_tokenizer, k):
@@ -137,7 +140,8 @@ class VectorModel(CommonOperations):
                 unique_list.append(x)
         return unique_list
     '''
-    def get_doc_tf(self, path, use_synonyms = False):
+
+    def get_doc_tf(self, path, use_synonyms=False):
         """
         Reads in a document and returns its term frequencies
         :param path: document path
@@ -192,7 +196,6 @@ class VectorModel(CommonOperations):
 
         # map synonyms of words in input vocabulary to the words in the vocabulary
         # self.map_synonyms()
-
 
     def map_synonyms(self):
         # create a dict of synonym to word mappings
@@ -289,7 +292,7 @@ class VectorModel(CommonOperations):
         self.idfs = packet['idfs']
 
 
-class Rocchio:
+class Rocchio(CommonOperations):
     def __init__(self, k):
         self.compound_tokenizer = CompoundTokenizer()
         self.category_weights = {}
@@ -314,17 +317,6 @@ class Rocchio:
                 out_dict[key] = dict1[key]
         return out_dict
 
-    @staticmethod
-    def unique(list1):
-        # initialize a null list
-        unique_list = []
-        # traverse for all elements
-        for x in list1:
-            # check if exists in unique_list or not
-            if x not in unique_list:
-                unique_list.append(x)
-        return unique_list
-
     def train(self, doc_paths, labels):
         # doc_paths, labels = dataset.get_train()
         self.available_labels = self.unique(labels)
@@ -342,20 +334,7 @@ class Rocchio:
                 self.category_weights[label] = self.dict_add(self.category_weights[label],
                                                              self.vm.weights[i])
             # normalize
-            norm = np.sqrt(np.sum(np.array(list(self.category_weights[label].values())) ** 2))
-            for key, weights in self.category_weights[label].items():
-                self.category_weights[label][key] = weights / norm
-
-    @staticmethod
-    def argmax(lst):
-        # In terms of equality, we pick the first time the max was reached
-        argument_max = -1
-        max_v = -1
-        for i, l in enumerate(lst):
-            if l > max_v:
-                argument_max = i
-                max_v = l
-        return argument_max
+            self.category_weights[label] = self.normalize_dict(self.category_weights[label] )
 
     @staticmethod
     def dict_cos_sim(dict1, dict2):
