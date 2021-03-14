@@ -195,7 +195,7 @@ class VectorModel(CommonOperations):
         self.drop_low_weights(percentile=self.drop_percentile)
 
         # map synonyms of words in input vocabulary to the words in the vocabulary
-        # self.map_synonyms()
+        self.map_synonyms()
 
     def map_synonyms(self):
         # create a dict of synonym to word mappings
@@ -257,7 +257,7 @@ class VectorModel(CommonOperations):
         """
         # check that we have the trained idfs
         assert (self.idfs is not None)
-        tfs = [self.get_doc_tf(doc, use_synonyms=False) for doc in doc_paths]
+        tfs = [self.get_doc_tf(doc, use_synonyms=True) for doc in doc_paths]
 
         test_weights = []
         for doc_TFs in tfs:
@@ -334,7 +334,7 @@ class Rocchio(CommonOperations):
                 self.category_weights[label] = self.dict_add(self.category_weights[label],
                                                              self.vm.weights[i])
             # normalize
-            self.category_weights[label] = self.normalize_dict(self.category_weights[label] )
+            self.category_weights[label] = self.normalize_dict(self.category_weights[label])
 
     def test(self, doc_paths, write_out=False, write_path='./output.labels'):
         # calculate the document weights
@@ -454,14 +454,18 @@ if __name__ == '__main__':
 
     # hyper-parameter tuning - idf exponent in TF-IDF weights (weight = tf*(idf**k))
     N_exponents = 2
-    k_fold = 2
+    K_fold = 2
 
     Ks = 0.1 + np.linspace(0, 0.7, N_exponents)
     # tune the exponent and train the model on best value
-    print('Tuning parameters and training model...')
-    tuner = ParameterTuner(k_fold=k_fold)
+    #print('Tuning parameters and training model...')
+    #tuner = ParameterTuner(k_fold=K_fold)
+
+    print('Training model')
     X, y = training.get_data()
-    r = tuner.tune(X, y, Ks)
+    #r = tuner.tune(X, y, Ks)
+    r = Rocchio(0.2)
+    r.train(X, y)
 
     # test the model on the
     print('Predicting labels for test data from: {}'.format(args.test_path))
