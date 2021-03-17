@@ -450,10 +450,8 @@ class CrossValidator:
         Tunes a single model parameter based on an input parameter list and stratified cross validation
         :param x: (list of str) list of document paths
         :param labels: (list of str) list of document labels
-        :param param: (iterable) parameter values to test model on
         :return: (model) trained model trained with the best-parameter found through stratified cross validation
         """
-
         # Stratified K-fold cross validation
         for k_f, (train_idx, test_idx) in tqdm(enumerate(self.skf.split(x, labels)),
                                                total=self.k_fold, position=0, desc='Cross-Validation'):
@@ -468,7 +466,6 @@ class CrossValidator:
             r1.train(x_tr, y_tr)
             # add accuracy to array
             self.accuracies.append(evaluate(r1, x_te, y_te))
-
         return self.accuracies
 
 
@@ -532,12 +529,10 @@ def get_args():
     Parse flags
     """
     parser = argparse.ArgumentParser()
-
     parser.add_argument('--input_path', type=str, default='./corpus1_train.labels')
     parser.add_argument('--output_path', type=str, default='./output.labels')
     parser.add_argument('--test_path', type=str, default='./corpus1_test.list')
     parser.add_argument('--validate', type=bool, default=False)
-
     return parser.parse_args()
 
 
@@ -550,19 +545,18 @@ if __name__ == '__main__':
     print('Training data obtained from: {}'.format(args.input_path))
     X, y = training.get_data()
 
-    # hyper-parameter tuning - idf exponent in TF-IDF weights (weight = tf*(idf**k))
-    N_exponents = 2
-    K_fold = 2
-
-    Ks = 0.1 + np.linspace(0, 0.7, N_exponents)
+    # hyper-parameter tuning
+    # N_exponents = 2
+    # K_fold = 2
+    # Ks = 0.1 + np.linspace(0, 0.7, N_exponents)
     # tune the exponent and train the model on best value
     # print('Tuning parameters and training model...')
     # tuner = ParameterTuner(k_fold=K_fold)
     # r = tuner.tune(X, y, Ks)
 
     if args.validate:
-        val = CrossValidator()
-        accuracies = val.validate(X, y)
+        validator = CrossValidator()
+        accuracies = validator.validate(X, y)
         print('Output Accuracies: {}'.format(accuracies))
         print('Average Accuracy: {}'.format(np.array(accuracies).mean()))
 
