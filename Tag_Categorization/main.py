@@ -116,10 +116,11 @@ class CommonOperations:
 
 
 class VectorModel(CommonOperations):
-    def __init__(self, comp_tokenizer, k=0.2):
+    def __init__(self, comp_tokenizer, train_idf_exp=0.2, test_idf_exp=1.2):
         # vector model parameters
         self.complex_tokenizer = comp_tokenizer
-        self.k = k
+        self.train_idf_exp = train_idf_exp
+        self.test_idf_exp = test_idf_exp
         self.drop_percentile = 3
 
         # storage
@@ -184,12 +185,12 @@ class VectorModel(CommonOperations):
         self.weights = []
         for i, doc_TFs in enumerate(corp_tfs):
             # Getting the tf-idf
-            doc_weights = {key: tf * self.idfs[key] ** self.k for key, tf in doc_TFs.items()}
+            doc_weights = {key: tf * self.idfs[key] ** self.train_idf_exp for key, tf in doc_TFs.items()}
             # normalizing per document & store in a list
             self.weights.append(self.normalize_dict(doc_weights))
 
         # drop lowest weights by percentile
-        self.drop_low_weights()
+        self.weights = self.drop_low_weights(self.weights, self.drop_percentile)
 
         # map synonyms of words in input vocabulary to the words in the vocabulary
         if self.substitute_synonyms:
@@ -202,7 +203,7 @@ class VectorModel(CommonOperations):
         # create a dict of synonym to word mappings
         for word in self.idfs.keys():
             # get the synonyms
-            synonyms = self.get_n_synonyms(word)
+            synonyms = self.get_n_synonyms(word, self.top_n)
             # if we have synonyms
             if synonyms is not None:
                 # append to list in case multiple words have the same synonyms
@@ -224,25 +225,11 @@ class VectorModel(CommonOperations):
             elif len(words) == 1:
                 self.synonym_map[synonym] = words[0]
 
-    def get_inverse_weights(self, corp_tfs):
-        """
-        Reads through the weights and inverts them so each word is a dict of the document index and the corresponding
-        word weight in the document.
-        :param corp_tfs: (list of dicts) corpora tfs list
-        """
-        vocab = {}
-        for word in self.idfs.keys():
-            vocab[word] = []
-            for index, d in enumerate(corp_tfs):
-                if word in d.keys():
-                    weight = self.weights[index][word]
-                    vocab[word].append({'id': index, 'w': weight})
-        return vocab
-
-    def get_n_synonyms(self, word):
+    def get_n_synonyms(self, word, top_n):
         """
         Returns the top N synonyms for an input word
         :param word: (str) input word
+        :param top_n: (int) maximum number of synonyms to return
         """
         # get unique synonyms
         synonyms = wordnet.synsets(word)
@@ -250,18 +237,20 @@ class VectorModel(CommonOperations):
         un_synonyms = self.unique(synonyms)
 
         # find the number of elements to return
-        num_elements = min(len(un_synonyms), self.top_n)
+        num_elements = min(len(un_synonyms), top_n)
         return un_synonyms[:num_elements]
 
-    def drop_low_weights(self):
+    @staticmethod
+    def drop_low_weights(weights, drop_percentile):
         """
         Drops the lowest weights of self.weights by percentile
         """
-        weights = [list(doc_weight.values()) for doc_weight in self.weights]
-        weights = np.array([item for sublist in weights for item in sublist])
-        min_weight = np.percentile(weights, self.drop_percentile, interpolation='midpoint')
-        for idx, document_weight in enumerate(self.weights):
-            self.weights[idx] = {word: weight for word, weight in self.weights[idx].items() if weight > min_weight}
+        weight_values = [list(doc_weight.values()) for doc_weight in weights]
+        weight_values = np.array([item for sublist in weight_values for item in sublist])
+        min_weight = np.percentile(weight_values, drop_percentile, interpolation='midpoint')
+        for idx, document_weight in enumerate(weights):
+            weights[idx] = {word: weight for word, weight in weights[idx].items() if weight > min_weight}
+        return weights
 
     def get_test_weights(self, doc_paths):
         """
@@ -270,31 +259,56 @@ class VectorModel(CommonOperations):
         :param doc_paths: document path list
         :return: a list of test document weights
         """
-        # check that we have the trained idfs
+        # check that the model is trained
         assert (self.idfs is not None)
+
+        # Get tfs
         tfs = [self.get_doc_tf(doc, sub_synonyms=self.substitute_synonyms) for doc in doc_paths]
 
+        # return the test document weights
         test_weights = []
         for doc_TFs in tfs:
             # Getting the tf-idf
             doc_weights = {}
             for word, tf in doc_TFs.items():
-                doc_weights[word] = tf * self.idfs.get(word, 0.0)
+                doc_weights[word] = tf * self.idfs.get(word, 0.0)**self.test_idf_exp
             # normalizing per document & store in a list
             test_weights.append(self.normalize_dict(doc_weights))
         return test_weights
 
-    def save_vm(self, out_path='./'):
+    def get_inverse_weights(self, corp_tfs, weights):
+        """
+        Reads through the weights and inverts them so each word is a dict of the document index and the corresponding
+        word weight in the document.
+        :param corp_tfs: (list of dicts) corpora tfs list
+        :param weights: (list of dicts) list of word weight dictionaries
+        """
+        vocab = {}
+        for word in self.idfs.keys():
+            vocab[word] = []
+            for index, d in enumerate(corp_tfs):
+                if word in d.keys():
+                    weight = weights[index][word]
+                    vocab[word].append({'id': index, 'w': weight})
+        return vocab
+
+    def save_as_file(self, out_path='./'):
         """
         Saves the vector model training weights and idfs
         :param out_path: output path for the saved file
         :return: 
         """
         packet = {'w': self.weights, 'idfs': self.idfs}
-        with open(out_path + 'weights.json', 'w') as fout:
-            json.dump(packet, fout)
+        with open(out_path + 'weights.json', 'w') as f_out:
+            json.dump(packet, f_out)
 
-    def load_vm(self, in_path='./'):
+    def save_as_dict(self):
+        """
+        Store the vector model as a dict
+        """
+        return {'w': self.weights, 'idfs': self.idfs}
+
+    def load_from_file(self, in_path='./'):
         """
         Loads a vector model from a save file
         :param in_path: input save file
@@ -305,6 +319,13 @@ class VectorModel(CommonOperations):
             packet = json.loads(fin.read())
         self.weights = packet['w']
         self.idfs = packet['idfs']
+
+    def load_from_dict(self, in_dict):
+        """
+        Load the vector model from a dictionary
+        """
+        self.weights = in_dict['w']
+        self.idfs = in_dict['idfs']
 
 
 class Rocchio(CommonOperations):
@@ -373,7 +394,7 @@ class Rocchio(CommonOperations):
     @staticmethod
     def dict_cos_sim(dict1, dict2):
         """
-        Modidied cosine similarity between two dictionaries (numerator is sum of square roots)
+        Modified cosine similarity between two dictionaries (numerator is sum of square roots)
         """
         dict_smaller = dict1 if len(dict1) < len(dict2) else dict2
         dict_bigger = dict2 if len(dict1) < len(dict2) else dict1
@@ -398,23 +419,23 @@ class Rocchio(CommonOperations):
         """
         Save the Rocchio model
         """
-        # save the weights to a .json
-        self.vm.save_vm()
+        # save to a .json
         packet = {'w': self.category_weights,
-                  'labels': self.available_labels}
-        with open(out_path + 'Rocchio.json', 'w') as fout:
-            json.dump(packet, fout)
+                  'labels': self.available_labels,
+                  'vm': self.vm.save_as_dict()}
+        with open(out_path + 'Rocchio.json', 'w') as f_out:
+            json.dump(packet, f_out)
 
     def load_rocchio(self, in_path='./'):
         """
         Load the Rocchio model
         """
-        # load the weights from a .json file
+        # load from a .json file
         with open(in_path + 'Rocchio.json', 'r') as fin:
             packet = json.loads(fin.read())
         self.category_weights = packet['w']
         self.available_labels = packet['labels']
-        self.vm.load_vm()
+        self.vm.load_from_dict(packet['vm'])
 
 
 class ParameterTuner:
