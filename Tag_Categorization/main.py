@@ -55,6 +55,12 @@ class CompoundTokenizer:
         self.stop_words.extend(more_stop_words)
 
     def __call__(self, document_str):
+        """
+        Tokenize and input string
+        :param document_str: (str) input string
+        :return: (list of str) list of tokens
+        """
+
         # get the tokens
         tokens = self.tokenizer.tokenize(document_str.lower())
         # remove stop words
@@ -72,7 +78,8 @@ class CommonOperations:
     @staticmethod
     def unique(list1):
         """
-        Return a list of all the unique elements in the input list
+        :param list1: (list) arbitrary list
+        :return: list of all the unique elements in the input list
         """
         # initialize a null list
         unique_list = []
@@ -87,6 +94,8 @@ class CommonOperations:
     def normalize_dict(dict1):
         """
         Normalize the values of the dictionary to have norm 1
+        :param: (dict) dictionary to normalize
+        :return: (dict) normalized dictionary (L-2 Norm)
         """
         norm = np.sqrt(np.sum(np.array(list(dict1.values())) ** 2))
         d = {key: value / norm for key, value in dict1.items()}
@@ -184,6 +193,9 @@ class VectorModel(CommonOperations):
         # self.map_synonyms()
 
     def map_synonyms(self):
+        """
+        Use the words in the self.idfs to create an inverted dictionary from synonyms to self.idfs words
+        """
         # create a dict of synonym to word mappings
         for word in self.idfs.keys():
             # get the synonyms
@@ -212,6 +224,11 @@ class VectorModel(CommonOperations):
                 self.synonym_map[synonym] = words[0]
 
     def get_inverse_weights(self, corp_tfs):
+        """
+        Reads through the weights and inverts them so each word is a dict of the document index and the corresponding
+        word weight in the document.
+        :param corp_tfs: (list of dicts) corpora tfs list
+        """
         vocab = {}
         for word in self.idfs.keys():
             vocab[word] = []
@@ -222,12 +239,24 @@ class VectorModel(CommonOperations):
         return vocab
 
     def get_n_synonyms(self, word, top_n=-1):
+        """
+        Returns the top N synonyms for an input word
+        :param word: (str) input word
+        :param top_n: (int) top n synonyms to return at best scenario (will return fewer if word doesn't have synonyms)
+        """
         # Then, we're going to use the term "program" to find synsets like so:
         synonyms = wordnet.synsets(word)
         synonyms = [syn.lemmas()[0].name() for syn in synonyms]
-        return self.unique(synonyms)[:top_n]
+        un_synonyms = self.unique(synonyms)
+        # number of elements to return
+        num_elements = min(len(un_synonyms), top_n)
+        return un_synonyms[:num_elements]
 
     def drop_low_weights(self, percentile=3):
+        """
+        Drops the lowest weights of self.weights by percentile
+        :param percentile: (float) percentile to drop
+        """
         weights = [list(doc_weight.values()) for doc_weight in self.weights]
         weights = np.array([item for sublist in weights for item in sublist])
         min_weight = np.percentile(weights, percentile, interpolation='midpoint')
@@ -281,9 +310,10 @@ class VectorModel(CommonOperations):
 class Rocchio(CommonOperations):
     def __init__(self, k):
         self.compound_tokenizer = CompoundTokenizer()
+        self.vm = VectorModel(self.compound_tokenizer, k)
+
         self.category_weights = {}
         self.available_labels = None
-        self.vm = VectorModel(self.compound_tokenizer, k)
 
     @staticmethod
     def dict_add(dict1, dict2):
@@ -381,36 +411,49 @@ class ParameterTuner:
         self.model = model
         self.accuracies = None
         self.best_param = None
-        # Move from cross-validation to full dataset we might want to change the
-        # exponent
-        self.correction = 0
 
     def tune(self, x, labels, param):
+        """
+        Tunes a single model parameter based on an input parameter list and stratified cross validation
+        :param x: (list of str) list of document paths
+        :param labels: (list of str) list of document labels
+        :param param: (iterable) parameter values to test model on
+        :return: (model) trained model trained with the best-parameter found through stratified cross validation
+        """
         self.accuracies = np.zeros((self.k_fold, len(param)))
 
         # Stratified K-fold cross validation
         for k_f, (train_idx, test_idx) in tqdm(enumerate(self.skf.split(x, labels)),
                                                total=self.k_fold, position=0):
             for p_idx, p in enumerate(param):
+                # set the training and validation data & labels
                 x_tr = [x[i] for i in train_idx]
                 x_te = [x[i] for i in test_idx]
                 y_tr = [labels[i] for i in train_idx]
                 y_te = [labels[i] for i in test_idx]
 
+                # initialize and train model
                 r1 = self.model(p)
                 r1.train(x_tr, y_tr)
+                # add accuracy to array
                 self.accuracies[k_f, p_idx] = self.evaluate(r1, x_te, y_te)
 
-        self.best_param = param[self.accuracies.mean(axis=0).argmax()] + self.correction
-        # print('Max accuracy from cross-validation: ', self.accuracies.max())
-        # print('Selected idf exponent of: {}'.format(self.best_param))
+        # Save the best parameter
+        self.best_param = param[self.accuracies.mean(axis=0).argmax()]
 
+        # return a trained model on the best parameter - trained on all the data
         best_model = self.model(self.best_param)
         best_model.train(x, labels)
         return best_model
 
     @staticmethod
     def evaluate(model, x, labels):
+        """
+        Evaluate a model's accuracy on a test set
+        :param model: (model) model to evaluate
+        :param x: (list of str) list of test data
+        :param labels: (list of str) list of test labels
+        """
         predictions = model.test(x)
         correct = np.array([prediction == labels[i] for i, prediction in enumerate(predictions)])
         return correct.mean()
