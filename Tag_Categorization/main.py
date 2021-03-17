@@ -55,6 +55,11 @@ class CompoundTokenizer:
         self.stop_words.extend(more_stop_words)
 
     def __call__(self, document_str):
+        """
+        Tokenize and input string
+        :param document_str: (str) input string
+        :return: (list of str) list of tokens
+        """
         # get the tokens
         tokens = self.tokenizer.tokenize(document_str.lower())
         # remove stop words
@@ -72,7 +77,8 @@ class CommonOperations:
     @staticmethod
     def unique(list1):
         """
-        Return a list of all the unique elements in the input list
+        :param list1: (list) arbitrary list
+        :return: list of all the unique elements in the input list
         """
         # initialize a null list
         unique_list = []
@@ -87,6 +93,8 @@ class CommonOperations:
     def normalize_dict(dict1):
         """
         Normalize the values of the dictionary to have norm 1
+        :param: (dict) dictionary to normalize
+        :return: (dict) normalized dictionary (L-2 Norm)
         """
         norm = np.sqrt(np.sum(np.array(list(dict1.values())) ** 2))
         d = {key: value / norm for key, value in dict1.items()}
@@ -108,10 +116,11 @@ class CommonOperations:
 
 
 class VectorModel(CommonOperations):
-    def __init__(self, comp_tokenizer, k=0.2):
+    def __init__(self, comp_tokenizer, train_idf_exp=0.2, test_idf_exp=1.2):
         # vector model parameters
         self.complex_tokenizer = comp_tokenizer
-        self.k = k
+        self.train_idf_exp = train_idf_exp
+        self.test_idf_exp = test_idf_exp
         self.drop_percentile = 3
 
         # storage
@@ -121,6 +130,7 @@ class VectorModel(CommonOperations):
         # synonym mapping
         self.synonym_map = defaultdict(list)
         self.substitute_synonyms = True
+        self.top_n = -1
 
     def get_doc_tf(self, path, sub_synonyms=False):
         """
@@ -133,6 +143,7 @@ class VectorModel(CommonOperations):
         # grab the document
         with open(path) as f:
             value = f.read()
+
         # tokenize
         tokens = self.complex_tokenizer(value)
 
@@ -144,7 +155,8 @@ class VectorModel(CommonOperations):
         # count the occurrences of each word
         word_counts = dict(Counter(tokens))
         num_tokens = len(tokens)
-        # Get TF
+
+        # Calculate TFs
         tf = {key: 1 + np.log(word_count / num_tokens) for key, word_count in word_counts.items()}
         return tf
 
@@ -160,12 +172,12 @@ class VectorModel(CommonOperations):
         # get TFs for all documents
         corp_tfs = [self.get_doc_tf(doc) for doc in doc_paths]
 
-        # Get IDFs for all words seen
         # list of lists of the words seen in each document
         words = []
         for document in corp_tfs:
             words.extend(list(document.keys()))
 
+        # Get IDFs for all words seen
         words = Counter(words)
         self.idfs = {key: np.log(n / val) for key, val in words.items()}
 
@@ -173,66 +185,72 @@ class VectorModel(CommonOperations):
         self.weights = []
         for i, doc_TFs in enumerate(corp_tfs):
             # Getting the tf-idf
-            doc_weights = {key: tf * self.idfs[key] ** self.k for key, tf in doc_TFs.items()}
+            doc_weights = {key: tf * self.idfs[key] ** self.train_idf_exp for key, tf in doc_TFs.items()}
             # normalizing per document & store in a list
             self.weights.append(self.normalize_dict(doc_weights))
 
         # drop lowest weights by percentile
-        self.drop_low_weights(percentile=self.drop_percentile)
+        self.weights = self.drop_low_weights(self.weights, self.drop_percentile)
 
         # map synonyms of words in input vocabulary to the words in the vocabulary
-        # self.map_synonyms()
+        if self.substitute_synonyms:
+            self.map_synonyms()
 
     def map_synonyms(self):
+        """
+        Use the words in the self.idfs to create an inverted dictionary from synonyms to self.idfs words
+        """
         # create a dict of synonym to word mappings
         for word in self.idfs.keys():
             # get the synonyms
-            synonyms = self.get_n_synonyms(word)
+            synonyms = self.get_n_synonyms(word, self.top_n)
             # if we have synonyms
-            if synonyms is not None or not synonyms:
+            if synonyms is not None:
                 # append to list in case multiple words have the same synonyms
                 for synonym in synonyms:
                     self.synonym_map[synonym].append(word)
 
         for word in self.idfs.keys():
-            # words in the input vocabulary should always map to themselves
+            # words in the input vocabulary should always map to themselves only
             self.synonym_map[word] = [word]
 
         # in case multiple words in our test docs have the same synonyms, set the synonyms to map to the words
-        # with the lowest idf --> least influence our results
+        # with the highest idf
         for synonym, words in self.synonym_map.items():
             # if multiple words in the input vocab map to the same synonym
             if len(words) > 1:
-                word_weights = []
-                for word in words:
-                    word_weights.append(self.idfs[word])
+                word_weights = [self.idfs[word] for word in words]
                 self.synonym_map[synonym] = words[self.argmax(word_weights)]
             # if the synonyms map to one word
             elif len(words) == 1:
                 self.synonym_map[synonym] = words[0]
 
-    def get_inverse_weights(self, corp_tfs):
-        vocab = {}
-        for word in self.idfs.keys():
-            vocab[word] = []
-            for index, d in enumerate(corp_tfs):
-                if word in d.keys():
-                    weight = self.weights[index][word]
-                    vocab[word].append({'id': index, 'w': weight})
-        return vocab
-
-    def get_n_synonyms(self, word, top_n=-1):
-        # Then, we're going to use the term "program" to find synsets like so:
+    def get_n_synonyms(self, word, top_n):
+        """
+        Returns the top N synonyms for an input word
+        :param word: (str) input word
+        :param top_n: (int) maximum number of synonyms to return
+        """
+        # get unique synonyms
         synonyms = wordnet.synsets(word)
         synonyms = [syn.lemmas()[0].name() for syn in synonyms]
-        return self.unique(synonyms)[:top_n]
+        un_synonyms = self.unique(synonyms)
 
-    def drop_low_weights(self, percentile=3):
-        weights = [list(doc_weight.values()) for doc_weight in self.weights]
-        weights = np.array([item for sublist in weights for item in sublist])
-        min_weight = np.percentile(weights, percentile, interpolation='midpoint')
-        for idx, document_weight in enumerate(self.weights):
-            self.weights[idx] = {word: weight for word, weight in self.weights[idx].items() if weight > min_weight}
+        # find the number of elements to return
+        num_elements = min(len(un_synonyms), top_n)
+        return un_synonyms[:num_elements]
+
+    @staticmethod
+    def drop_low_weights(weights, drop_percentile):
+        """
+        Drops the lowest weights of self.weights by percentile
+        """
+        weight_values = [list(doc_weight.values()) for doc_weight in weights]
+        weight_values = np.array([item for sublist in weight_values for item in sublist])
+        min_weight = np.percentile(weight_values, drop_percentile, interpolation='midpoint')
+        for idx, document_weight in enumerate(weights):
+            weights[idx] = {word: weight for word, weight in weights[idx].items() if weight > min_weight}
+        return weights
 
     def get_test_weights(self, doc_paths):
         """
@@ -241,31 +259,56 @@ class VectorModel(CommonOperations):
         :param doc_paths: document path list
         :return: a list of test document weights
         """
-        # check that we have the trained idfs
+        # check that the model is trained
         assert (self.idfs is not None)
-        tfs = [self.get_doc_tf(doc, sub_synonyms=False) for doc in doc_paths]
 
+        # Get tfs
+        tfs = [self.get_doc_tf(doc, sub_synonyms=self.substitute_synonyms) for doc in doc_paths]
+
+        # return the test document weights
         test_weights = []
         for doc_TFs in tfs:
             # Getting the tf-idf
             doc_weights = {}
             for word, tf in doc_TFs.items():
-                doc_weights[word] = tf * self.idfs.get(word, 0.0)
+                doc_weights[word] = tf * self.idfs.get(word, 0.0)**self.test_idf_exp
             # normalizing per document & store in a list
             test_weights.append(self.normalize_dict(doc_weights))
         return test_weights
 
-    def save_vm(self, out_path='./'):
+    def get_inverse_weights(self, corp_tfs, weights):
+        """
+        Reads through the weights and inverts them so each word is a dict of the document index and the corresponding
+        word weight in the document.
+        :param corp_tfs: (list of dicts) corpora tfs list
+        :param weights: (list of dicts) list of word weight dictionaries
+        """
+        vocab = {}
+        for word in self.idfs.keys():
+            vocab[word] = []
+            for index, d in enumerate(corp_tfs):
+                if word in d.keys():
+                    weight = weights[index][word]
+                    vocab[word].append({'id': index, 'w': weight})
+        return vocab
+
+    def save_as_file(self, out_path='./'):
         """
         Saves the vector model training weights and idfs
         :param out_path: output path for the saved file
         :return: 
         """
         packet = {'w': self.weights, 'idfs': self.idfs}
-        with open(out_path + 'weights.json', 'w') as fout:
-            json.dump(packet, fout)
+        with open(out_path + 'weights.json', 'w') as f_out:
+            json.dump(packet, f_out)
 
-    def load_vm(self, in_path='./'):
+    def save_as_dict(self):
+        """
+        Store the vector model as a dict
+        """
+        return {'w': self.weights, 'idfs': self.idfs}
+
+    def load_from_file(self, in_path='./'):
         """
         Loads a vector model from a save file
         :param in_path: input save file
@@ -277,33 +320,42 @@ class VectorModel(CommonOperations):
         self.weights = packet['w']
         self.idfs = packet['idfs']
 
+    def load_from_dict(self, in_dict):
+        """
+        Load the vector model from a dictionary
+        """
+        self.weights = in_dict['w']
+        self.idfs = in_dict['idfs']
+
 
 class Rocchio(CommonOperations):
-    def __init__(self, k):
+    def __init__(self, k=0.2):
         self.compound_tokenizer = CompoundTokenizer()
+        self.vm = VectorModel(self.compound_tokenizer, k)
+
         self.category_weights = {}
         self.available_labels = None
-        self.vm = VectorModel(self.compound_tokenizer, k)
 
     @staticmethod
     def dict_add(dict1, dict2):
-        # Adds the keys of two dictionaries. If a key doesn't exist in one dict,
-        # the output dictionary's key will have the value that the key held in the
-        # other dict (the one where the key did exist in). Else, the sum of the
-        # two values is set to output key value:
-        # Cases: key in dict1, key in dict2, or key in both.
+        """
+        Adds the values of two dictionaries by key. If key appears in only one dict, other dict assumed to have a value
+        of zero for the key.
+        """
         out_dict = {}
         for key in dict2.keys():
-            if key in dict1.keys():
-                out_dict[key] = dict2[key] + dict1[key]
-            else:
-                out_dict[key] = dict2[key]
-        for key in dict1.keys():
-            if key not in dict2.keys():
-                out_dict[key] = dict1[key]
+            out_dict[key] = dict2[key] + dict1.get(key, 0)
+
+        # keys in dict1 that aren't in dict2:
+        unused_keys = [key for key in dict1.keys() if key not in dict2.keys()]
+        for key in unused_keys:
+            out_dict[key] = dict1[key]
         return out_dict
 
     def train(self, doc_paths, labels):
+        """
+        Train model
+        """
         self.available_labels = self.unique(labels)
 
         # get the indices that match each label
@@ -322,11 +374,14 @@ class Rocchio(CommonOperations):
             self.category_weights[label] = self.normalize_dict(self.category_weights[label])
 
     def test(self, doc_paths, write_out=False, write_path='./output.labels'):
+        """
+        Test model and write out predictions
+        """
         # calculate the document weights
         vm_weights = self.vm.get_test_weights(doc_paths)
         predictions = []
         # loop over the test documents
-        for doc_w in tqdm(vm_weights, position=0):
+        for doc_w in tqdm(vm_weights, position=1, leave=False, desc='Evaluation:'):
             # for each document calculate the
             cat_similarities = []
             for label in self.available_labels:
@@ -338,6 +393,9 @@ class Rocchio(CommonOperations):
 
     @staticmethod
     def dict_cos_sim(dict1, dict2):
+        """
+        Modified cosine similarity between two dictionaries (numerator is sum of square roots)
+        """
         dict_smaller = dict1 if len(dict1) < len(dict2) else dict2
         dict_bigger = dict2 if len(dict1) < len(dict2) else dict1
         # since weight vectors are normalized, we only need to take the inner
@@ -358,20 +416,57 @@ class Rocchio(CommonOperations):
         df.to_csv(write_path, sep=' ', header=False, index=False)
 
     def save_rocchio(self, out_path='./'):
-        # save the weights to a .json
-        self.vm.save_vm()
+        """
+        Save the Rocchio model
+        """
+        # save to a .json
         packet = {'w': self.category_weights,
-                  'labels': self.available_labels}
-        with open(out_path + 'Rocchio.json', 'w') as fout:
-            json.dump(packet, fout)
+                  'labels': self.available_labels,
+                  'vm': self.vm.save_as_dict()}
+        with open(out_path + 'Rocchio.json', 'w') as f_out:
+            json.dump(packet, f_out)
 
     def load_rocchio(self, in_path='./'):
-        # load the weights from a .json file
+        """
+        Load the Rocchio model
+        """
+        # load from a .json file
         with open(in_path + 'Rocchio.json', 'r') as fin:
             packet = json.loads(fin.read())
         self.category_weights = packet['w']
         self.available_labels = packet['labels']
-        self.vm.load_vm()
+        self.vm.load_from_dict(packet['vm'])
+
+
+class CrossValidator:
+    def __init__(self, k_fold=6, model=Rocchio):
+        self.k_fold = k_fold
+        self.model = model
+        self.skf = StratifiedKFold(n_splits=k_fold, shuffle=True, random_state=SEED)
+        self.accuracies = []
+
+    def validate(self, x, labels):
+        """
+        Tunes a single model parameter based on an input parameter list and stratified cross validation
+        :param x: (list of str) list of document paths
+        :param labels: (list of str) list of document labels
+        :return: (model) trained model trained with the best-parameter found through stratified cross validation
+        """
+        # Stratified K-fold cross validation
+        for k_f, (train_idx, test_idx) in tqdm(enumerate(self.skf.split(x, labels)),
+                                               total=self.k_fold, position=0, desc='Cross-Validation'):
+            # set the training and validation data & labels
+            x_tr = [x[i] for i in train_idx]
+            x_te = [x[i] for i in test_idx]
+            y_tr = [labels[i] for i in train_idx]
+            y_te = [labels[i] for i in test_idx]
+
+            # initialize and train model
+            r1 = self.model()
+            r1.train(x_tr, y_tr)
+            # add accuracy to array
+            self.accuracies.append(evaluate(r1, x_te, y_te))
+        return self.accuracies
 
 
 class ParameterTuner:
@@ -381,39 +476,52 @@ class ParameterTuner:
         self.model = model
         self.accuracies = None
         self.best_param = None
-        # Move from cross-validation to full dataset we might want to change the
-        # exponent
-        self.correction = 0
 
     def tune(self, x, labels, param):
+        """
+        Tunes a single model parameter based on an input parameter list and stratified cross validation
+        :param x: (list of str) list of document paths
+        :param labels: (list of str) list of document labels
+        :param param: (iterable) parameter values to test model on
+        :return: (model) trained model trained with the best-parameter found through stratified cross validation
+        """
         self.accuracies = np.zeros((self.k_fold, len(param)))
 
         # Stratified K-fold cross validation
         for k_f, (train_idx, test_idx) in tqdm(enumerate(self.skf.split(x, labels)),
-                                               total=self.k_fold, position=0):
-            for p_idx, p in enumerate(param):
-                x_tr = [x[i] for i in train_idx]
-                x_te = [x[i] for i in test_idx]
-                y_tr = [labels[i] for i in train_idx]
-                y_te = [labels[i] for i in test_idx]
+                                               total=self.k_fold, position=0, desc='Cross-Validation'):
+            # set the training and validation data & labels
+            x_tr = [x[i] for i in train_idx]
+            x_te = [x[i] for i in test_idx]
+            y_tr = [labels[i] for i in train_idx]
+            y_te = [labels[i] for i in test_idx]
 
+            for p_idx, p in enumerate(param):
+                # initialize and train model
                 r1 = self.model(p)
                 r1.train(x_tr, y_tr)
-                self.accuracies[k_f, p_idx] = self.evaluate(r1, x_te, y_te)
+                # add accuracy to array
+                self.accuracies[k_f, p_idx] = evaluate(r1, x_te, y_te)
 
-        self.best_param = param[self.accuracies.mean(axis=0).argmax()] + self.correction
-        # print('Max accuracy from cross-validation: ', self.accuracies.max())
-        # print('Selected idf exponent of: {}'.format(self.best_param))
+        # Save the best parameter
+        self.best_param = param[self.accuracies.mean(axis=0).argmax()]
 
+        # return a trained model on the best parameter - trained on all the data
         best_model = self.model(self.best_param)
         best_model.train(x, labels)
-        return best_model
+        return best_model, self.accuracies
 
-    @staticmethod
-    def evaluate(model, x, labels):
-        predictions = model.test(x)
-        correct = np.array([prediction == labels[i] for i, prediction in enumerate(predictions)])
-        return correct.mean()
+
+def evaluate(model, x, labels):
+    """
+    Evaluate a model's accuracy on a test set
+    :param model: (model) model to evaluate
+    :param x: (list of str) list of test data
+    :param labels: (list of str) list of test labels
+    """
+    predictions = model.test(x)
+    correct = np.array([prediction == labels[i] for i, prediction in enumerate(predictions)])
+    return correct.mean()
 
 
 def get_args():
@@ -421,11 +529,10 @@ def get_args():
     Parse flags
     """
     parser = argparse.ArgumentParser()
-
     parser.add_argument('--input_path', type=str, default='./corpus1_train.labels')
     parser.add_argument('--output_path', type=str, default='./output.labels')
     parser.add_argument('--test_path', type=str, default='./corpus1_test.list')
-
+    parser.add_argument('--validate', type=bool, default=False)
     return parser.parse_args()
 
 
@@ -438,23 +545,29 @@ if __name__ == '__main__':
     print('Training data obtained from: {}'.format(args.input_path))
     X, y = training.get_data()
 
-    # hyper-parameter tuning - idf exponent in TF-IDF weights (weight = tf*(idf**k))
-    N_exponents = 2
-    K_fold = 2
-
-    Ks = 0.1 + np.linspace(0, 0.7, N_exponents)
+    # hyper-parameter tuning
+    # N_exponents = 2
+    # K_fold = 2
+    # Ks = 0.1 + np.linspace(0, 0.7, N_exponents)
     # tune the exponent and train the model on best value
     # print('Tuning parameters and training model...')
     # tuner = ParameterTuner(k_fold=K_fold)
     # r = tuner.tune(X, y, Ks)
 
-    print('Training model...')
-    r = Rocchio(0.2)
-    r.train(X, y)
+    if args.validate:
+        validator = CrossValidator()
+        accuracies = validator.validate(X, y)
+        print('Output Accuracies: {}'.format(accuracies))
+        print('Average Accuracy: {}'.format(np.array(accuracies).mean()))
 
-    # test the model on the
-    print('Predicting labels for test data from: {}'.format(args.test_path))
-    testing = DataReader(args.test_path)
-    X_te, _ = testing.get_data()
-    r.test(X_te, write_out=True, write_path=args.output_path)
-    print('Output saved to: {}'.format(args.output_path))
+    else:
+        print('Training model...')
+        r = Rocchio()
+        r.train(X, y)
+
+        # test the model on the
+        print('Predicting labels for test data from: {}'.format(args.test_path))
+        testing = DataReader(args.test_path)
+        X_te, _ = testing.get_data()
+        r.test(X_te, write_out=True, write_path=args.output_path)
+        print('Output saved to: {}'.format(args.output_path))
