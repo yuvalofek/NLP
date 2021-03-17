@@ -60,7 +60,6 @@ class CompoundTokenizer:
         :param document_str: (str) input string
         :return: (list of str) list of tokens
         """
-
         # get the tokens
         tokens = self.tokenizer.tokenize(document_str.lower())
         # remove stop words
@@ -130,6 +129,7 @@ class VectorModel(CommonOperations):
         # synonym mapping
         self.synonym_map = defaultdict(list)
         self.substitute_synonyms = True
+        self.top_n = -1
 
     def get_doc_tf(self, path, sub_synonyms=False):
         """
@@ -142,6 +142,7 @@ class VectorModel(CommonOperations):
         # grab the document
         with open(path) as f:
             value = f.read()
+
         # tokenize
         tokens = self.complex_tokenizer(value)
 
@@ -153,7 +154,8 @@ class VectorModel(CommonOperations):
         # count the occurrences of each word
         word_counts = dict(Counter(tokens))
         num_tokens = len(tokens)
-        # Get TF
+
+        # Calculate TFs
         tf = {key: 1 + np.log(word_count / num_tokens) for key, word_count in word_counts.items()}
         return tf
 
@@ -169,12 +171,12 @@ class VectorModel(CommonOperations):
         # get TFs for all documents
         corp_tfs = [self.get_doc_tf(doc) for doc in doc_paths]
 
-        # Get IDFs for all words seen
         # list of lists of the words seen in each document
         words = []
         for document in corp_tfs:
             words.extend(list(document.keys()))
 
+        # Get IDFs for all words seen
         words = Counter(words)
         self.idfs = {key: np.log(n / val) for key, val in words.items()}
 
@@ -187,10 +189,11 @@ class VectorModel(CommonOperations):
             self.weights.append(self.normalize_dict(doc_weights))
 
         # drop lowest weights by percentile
-        self.drop_low_weights(percentile=self.drop_percentile)
+        self.drop_low_weights()
 
         # map synonyms of words in input vocabulary to the words in the vocabulary
-        # self.map_synonyms()
+        if self.substitute_synonyms:
+            self.map_synonyms()
 
     def map_synonyms(self):
         """
@@ -201,23 +204,21 @@ class VectorModel(CommonOperations):
             # get the synonyms
             synonyms = self.get_n_synonyms(word)
             # if we have synonyms
-            if synonyms is not None or not synonyms:
+            if synonyms is not None:
                 # append to list in case multiple words have the same synonyms
                 for synonym in synonyms:
                     self.synonym_map[synonym].append(word)
 
         for word in self.idfs.keys():
-            # words in the input vocabulary should always map to themselves
+            # words in the input vocabulary should always map to themselves only
             self.synonym_map[word] = [word]
 
         # in case multiple words in our test docs have the same synonyms, set the synonyms to map to the words
-        # with the lowest idf --> least influence our results
+        # with the highest idf
         for synonym, words in self.synonym_map.items():
             # if multiple words in the input vocab map to the same synonym
             if len(words) > 1:
-                word_weights = []
-                for word in words:
-                    word_weights.append(self.idfs[word])
+                word_weights = [self.idfs[word] for word in words]
                 self.synonym_map[synonym] = words[self.argmax(word_weights)]
             # if the synonyms map to one word
             elif len(words) == 1:
@@ -238,28 +239,27 @@ class VectorModel(CommonOperations):
                     vocab[word].append({'id': index, 'w': weight})
         return vocab
 
-    def get_n_synonyms(self, word, top_n=-1):
+    def get_n_synonyms(self, word):
         """
         Returns the top N synonyms for an input word
         :param word: (str) input word
-        :param top_n: (int) top n synonyms to return at best scenario (will return fewer if word doesn't have synonyms)
         """
-        # Then, we're going to use the term "program" to find synsets like so:
+        # get unique synonyms
         synonyms = wordnet.synsets(word)
         synonyms = [syn.lemmas()[0].name() for syn in synonyms]
         un_synonyms = self.unique(synonyms)
-        # number of elements to return
-        num_elements = min(len(un_synonyms), top_n)
+
+        # find the number of elements to return
+        num_elements = min(len(un_synonyms), self.top_n)
         return un_synonyms[:num_elements]
 
-    def drop_low_weights(self, percentile=3):
+    def drop_low_weights(self):
         """
         Drops the lowest weights of self.weights by percentile
-        :param percentile: (float) percentile to drop
         """
         weights = [list(doc_weight.values()) for doc_weight in self.weights]
         weights = np.array([item for sublist in weights for item in sublist])
-        min_weight = np.percentile(weights, percentile, interpolation='midpoint')
+        min_weight = np.percentile(weights, self.drop_percentile, interpolation='midpoint')
         for idx, document_weight in enumerate(self.weights):
             self.weights[idx] = {word: weight for word, weight in self.weights[idx].items() if weight > min_weight}
 
@@ -272,7 +272,7 @@ class VectorModel(CommonOperations):
         """
         # check that we have the trained idfs
         assert (self.idfs is not None)
-        tfs = [self.get_doc_tf(doc, sub_synonyms=False) for doc in doc_paths]
+        tfs = [self.get_doc_tf(doc, sub_synonyms=self.substitute_synonyms) for doc in doc_paths]
 
         test_weights = []
         for doc_TFs in tfs:
@@ -317,23 +317,24 @@ class Rocchio(CommonOperations):
 
     @staticmethod
     def dict_add(dict1, dict2):
-        # Adds the keys of two dictionaries. If a key doesn't exist in one dict,
-        # the output dictionary's key will have the value that the key held in the
-        # other dict (the one where the key did exist in). Else, the sum of the
-        # two values is set to output key value:
-        # Cases: key in dict1, key in dict2, or key in both.
+        """
+        Adds the values of two dictionaries by key. If key appears in only one dict, other dict assumed to have a value
+        of zero for the key.
+        """
         out_dict = {}
         for key in dict2.keys():
-            if key in dict1.keys():
-                out_dict[key] = dict2[key] + dict1[key]
-            else:
-                out_dict[key] = dict2[key]
-        for key in dict1.keys():
-            if key not in dict2.keys():
-                out_dict[key] = dict1[key]
+            out_dict[key] = dict2[key] + dict1.get(key, 0)
+
+        # keys in dict1 that aren't in dict2:
+        unused_keys = [key for key in dict1.keys() if key not in dict2.keys()]
+        for key in unused_keys:
+            out_dict[key] = dict1[key]
         return out_dict
 
     def train(self, doc_paths, labels):
+        """
+        Train model
+        """
         self.available_labels = self.unique(labels)
 
         # get the indices that match each label
@@ -352,6 +353,9 @@ class Rocchio(CommonOperations):
             self.category_weights[label] = self.normalize_dict(self.category_weights[label])
 
     def test(self, doc_paths, write_out=False, write_path='./output.labels'):
+        """
+        Test model and write out predictions
+        """
         # calculate the document weights
         vm_weights = self.vm.get_test_weights(doc_paths)
         predictions = []
@@ -368,6 +372,9 @@ class Rocchio(CommonOperations):
 
     @staticmethod
     def dict_cos_sim(dict1, dict2):
+        """
+        Modidied cosine similarity between two dictionaries (numerator is sum of square roots)
+        """
         dict_smaller = dict1 if len(dict1) < len(dict2) else dict2
         dict_bigger = dict2 if len(dict1) < len(dict2) else dict1
         # since weight vectors are normalized, we only need to take the inner
@@ -388,6 +395,9 @@ class Rocchio(CommonOperations):
         df.to_csv(write_path, sep=' ', header=False, index=False)
 
     def save_rocchio(self, out_path='./'):
+        """
+        Save the Rocchio model
+        """
         # save the weights to a .json
         self.vm.save_vm()
         packet = {'w': self.category_weights,
@@ -396,6 +406,9 @@ class Rocchio(CommonOperations):
             json.dump(packet, fout)
 
     def load_rocchio(self, in_path='./'):
+        """
+        Load the Rocchio model
+        """
         # load the weights from a .json file
         with open(in_path + 'Rocchio.json', 'r') as fin:
             packet = json.loads(fin.read())
