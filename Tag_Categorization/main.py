@@ -1,6 +1,4 @@
-import nltk
-from collections import Counter
-from collections import defaultdict
+from collections import Counter, defaultdict
 import numpy as np
 import pandas as pd
 import json
@@ -8,12 +6,14 @@ from tqdm import tqdm
 from sklearn.model_selection import StratifiedKFold
 import argparse
 
-# from utils.DataReader import DataReader
-
+import nltk
 from nltk.corpus import wordnet
 
-nltk.download('stopwords')
-nltk.download('wordnet')
+# from utils.DataReader import DataReader
+
+nltk.download('stopwords', quiet=True)
+nltk.download('wordnet', quiet=True)
+
 SEED = 31415
 np.random.seed(SEED)
 
@@ -60,15 +60,8 @@ class CompoundTokenizer:
         tokens = self.tokenizer.tokenize(document_str.lower())
         # remove stop words
         filtered_words = [w for w in tokens if w not in self.stop_words]
-
         # stem
         stemmed = [self.stemmer.stem(w) for w in filtered_words]
-        # lemmantized =  [self.lemmatizer.lemmatize(w) for w in filtered_words]
-
-        # bi_gram
-        # bi_gram = list(nltk.bigrams(lemmantized))
-        # bi_gram = ([' '.join(tuple) for tuple in bi_gram])
-        # lemmantized.extend(bi_gram)
         return stemmed
 
 
@@ -79,7 +72,7 @@ class CommonOperations:
 
     @staticmethod
     def unique(list1):
-        # intilize a null list
+        # initialize a null list
         unique_list = []
         # traverse for all elements
         for x in list1:
@@ -118,30 +111,9 @@ class VectorModel(CommonOperations):
         self.weights = None
         self.k = k
         self.drop_percentile = 3
+        self.substitute_synonyms = True
 
-    '''
-    @staticmethod
-    def normalize_dict(dict1):
-        """
-        normalize the values of the dictionary to have norm 1
-        """
-        norm = np.sqrt(np.sum(np.array(list(dict1.values())) ** 2))
-        d = {key: value / norm for key, value in dict1.items()}
-        return d
-    
-    @staticmethod
-    def unique(list1):
-        # intilize a null list
-        unique_list = []
-        # traverse for all elements
-        for x in list1:
-            # check if exists in unique_list or not
-            if x not in unique_list:
-                unique_list.append(x)
-        return unique_list
-    '''
-
-    def get_doc_tf(self, path, use_synonyms=False):
+    def get_doc_tf(self, path, sub_syns=False):
         """
         Reads in a document and returns its term frequencies
         :param path: document path
@@ -153,7 +125,9 @@ class VectorModel(CommonOperations):
             value = f.read()
         # tokenize
         tokens = self.complex_tokenizer(value)
-        if use_synonyms:
+
+        # if we want to substitute input words for their synonyms in the training synonym mapping
+        if sub_syns:
             for idx, token in enumerate(tokens):
                 tokens[idx] = self.synonym_map.get(token)
         # count the occurrences of each word
@@ -195,7 +169,7 @@ class VectorModel(CommonOperations):
         self.drop_low_weights(percentile=self.drop_percentile)
 
         # map synonyms of words in input vocabulary to the words in the vocabulary
-        self.map_synonyms()
+        # self.map_synonyms()
 
     def map_synonyms(self):
         # create a dict of synonym to word mappings
@@ -257,7 +231,7 @@ class VectorModel(CommonOperations):
         """
         # check that we have the trained idfs
         assert (self.idfs is not None)
-        tfs = [self.get_doc_tf(doc, use_synonyms=True) for doc in doc_paths]
+        tfs = [self.get_doc_tf(doc, sub_syns=False) for doc in doc_paths]
 
         test_weights = []
         for doc_TFs in tfs:
@@ -318,7 +292,6 @@ class Rocchio(CommonOperations):
         return out_dict
 
     def train(self, doc_paths, labels):
-        # doc_paths, labels = dataset.get_train()
         self.available_labels = self.unique(labels)
 
         # get the indices that match each label
@@ -341,7 +314,7 @@ class Rocchio(CommonOperations):
         vm_weights = self.vm.get_test_weights(doc_paths)
         predictions = []
         # loop over the test documents
-        for doc_w in vm_weights:
+        for doc_w in tqdm(vm_weights, position=0):
             # for each document calculate the
             cat_similarities = []
             for label in self.available_labels:
@@ -451,6 +424,7 @@ if __name__ == '__main__':
     # read in the training labels file
     training = DataReader(args.input_path)
     print('Training data obtained from: {}'.format(args.input_path))
+    X, y = training.get_data()
 
     # hyper-parameter tuning - idf exponent in TF-IDF weights (weight = tf*(idf**k))
     N_exponents = 2
@@ -458,12 +432,11 @@ if __name__ == '__main__':
 
     Ks = 0.1 + np.linspace(0, 0.7, N_exponents)
     # tune the exponent and train the model on best value
-    #print('Tuning parameters and training model...')
-    #tuner = ParameterTuner(k_fold=K_fold)
+    # print('Tuning parameters and training model...')
+    # tuner = ParameterTuner(k_fold=K_fold)
+    # r = tuner.tune(X, y, Ks)
 
-    print('Training model')
-    X, y = training.get_data()
-    #r = tuner.tune(X, y, Ks)
+    print('Training model...')
     r = Rocchio(0.2)
     r.train(X, y)
 
