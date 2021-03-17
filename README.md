@@ -5,6 +5,6 @@ This course focuses on computational applications involving the processingof wri
 
 ## Projects
 Each in their own respective folder
-### 1. Tag Classification 
+### 1. [Tag Categorization](https://github.com/yuvalofek/NLP/tree/main/Tag_Categorization) 
 ### 2. Sentence Parser
 ### 3. N/A
