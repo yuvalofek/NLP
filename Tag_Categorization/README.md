@@ -1,5 +1,6 @@
 # Tag Categorization Project
 Project guidlines can be found here: http://faculty.cooper.edu/sable2/courses/spring2021/ece467/NLP_Spring2021_Project1.docx
+
 Corpora link: http://faculty.cooper.edu/sable2/courses/spring2021/ece467/TC_provided.tar.gz
 
 ## TLDR:
