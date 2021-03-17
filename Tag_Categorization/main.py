@@ -534,10 +534,11 @@ def get_args():
     Parse flags
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', type=str, default='./corpus1_train.labels')
-    parser.add_argument('--output_path', type=str, default='./output.labels')
-    parser.add_argument('--test_path', type=str, default='./corpus1_test.list')
-    parser.add_argument('--validate', type=bool, default=False)
+    parser.add_argument('--input_path', type=str, default='./corpus1_train.labels', help='training file path')
+    parser.add_argument('--test_path', type=str, default='./corpus1_test.list', help='testing file path')
+    parser.add_argument('--output_path', type=str, default='./output.labels', help='file path for output predictions')
+    parser.add_argument('--validate', default=False, action='store_true', help='cross-validate on the training data. '
+                                                                               'ignores test and output paths')
     return parser.parse_args()
 
 
