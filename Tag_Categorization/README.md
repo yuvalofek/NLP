@@ -4,7 +4,7 @@ Project guidlines can be found here: http://faculty.cooper.edu/sable2/courses/sp
 Corpora link: http://faculty.cooper.edu/sable2/courses/spring2021/ece467/TC_provided.tar.gz
 
 ## TLDR:
-- Create a text categorization system (3 ml methods covered in class are recommended)
+- Create a text categorization system (Naive Bayes, Rocchio, or KNN)
 - Allowed to use NLP resources not related to what we learned (like tokenizer or POS tagger)
 - Can use NLTK 
 - CANNOT use pre-existing routines for word stats, text categorization, or ML
