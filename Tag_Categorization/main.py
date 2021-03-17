@@ -335,7 +335,9 @@ class VectorModel(CommonOperations):
 class Rocchio(CommonOperations):
     def __init__(self, train_idf_exp=0.2, test_idf_exp=1.2):
         self.compound_tokenizer = CompoundTokenizer()
-        self.vm = VectorModel(comp_tokenizer=self.compound_tokenizer,train_idf_exp=0.2, test_idf_exp=1.2)
+        self.vm = VectorModel(comp_tokenizer=self.compound_tokenizer,
+                              train_idf_exp=train_idf_exp,
+                              test_idf_exp=test_idf_exp)
         self.category_weights = {}
         self.available_labels = None
 
