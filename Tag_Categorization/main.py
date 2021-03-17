@@ -151,7 +151,6 @@ class VectorModel(CommonOperations):
         if sub_synonyms:
             for idx, token in enumerate(tokens):
                 tokens[idx] = self.synonym_map.get(token)
-
         # count the occurrences of each word
         word_counts = dict(Counter(tokens))
         num_tokens = len(tokens)
@@ -170,7 +169,9 @@ class VectorModel(CommonOperations):
         n = len(doc_paths)
 
         # get TFs for all documents
-        corp_tfs = [self.get_doc_tf(doc) for doc in doc_paths]
+        corp_tfs = []
+        for doc in tqdm(doc_paths, position=1, desc='Calculating document TFs', leave=False):
+            corp_tfs.append(self.get_doc_tf(path=doc))
 
         # list of lists of the words seen in each document
         words = []
@@ -183,7 +184,7 @@ class VectorModel(CommonOperations):
 
         # calculate document TF*IDF weights
         self.weights = []
-        for i, doc_TFs in enumerate(corp_tfs):
+        for i, doc_TFs in tqdm(enumerate(corp_tfs), position=1, desc='Calculating document weights:', leave=False):
             # Getting the tf-idf
             doc_weights = {key: tf * self.idfs[key] ** self.train_idf_exp for key, tf in doc_TFs.items()}
             # normalizing per document & store in a list
@@ -201,10 +202,13 @@ class VectorModel(CommonOperations):
         Use the words in the self.idfs to create an inverted dictionary from synonyms to self.idfs words
         """
         # create a dict of synonym to word mappings
-        for word in self.idfs.keys():
+        for word in tqdm(self.idfs.keys(), position=1, desc='Creating synonym mapping', leave=False):
+            # map words to themselves
+            self.synonym_map[word] = [word]
+
             # get the synonyms
             synonyms = self.get_n_synonyms(word, self.top_n)
-            # if we have synonyms
+            # if we have synonyms create a key entry in the dict
             if synonyms is not None:
                 # append to list in case multiple words have the same synonyms
                 for synonym in synonyms:
@@ -263,7 +267,7 @@ class VectorModel(CommonOperations):
         assert (self.idfs is not None)
 
         # Get tfs
-        tfs = [self.get_doc_tf(doc, sub_synonyms=self.substitute_synonyms) for doc in doc_paths]
+        tfs = [self.get_doc_tf(path=doc, sub_synonyms=self.substitute_synonyms) for doc in doc_paths]
 
         # return the test document weights
         test_weights = []
@@ -329,10 +333,11 @@ class VectorModel(CommonOperations):
 
 
 class Rocchio(CommonOperations):
-    def __init__(self, k=0.2):
+    def __init__(self, train_idf_exp=0.2, test_idf_exp=1.2):
         self.compound_tokenizer = CompoundTokenizer()
-        self.vm = VectorModel(self.compound_tokenizer, k)
-
+        self.vm = VectorModel(comp_tokenizer=self.compound_tokenizer,
+                              train_idf_exp=train_idf_exp,
+                              test_idf_exp=test_idf_exp)
         self.category_weights = {}
         self.available_labels = None
 
@@ -363,7 +368,7 @@ class Rocchio(CommonOperations):
                          for label in self.available_labels}
 
         # Generate the weights for each of the tokens in the training set
-        self.vm.set_weights(doc_paths)
+        self.vm.set_weights(doc_paths=doc_paths)
         # add the weights of the documents to get category weights & normalize
         for label, indices in label_indices.items():
             self.category_weights[label] = {}
@@ -529,10 +534,11 @@ def get_args():
     Parse flags
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input_path', type=str, default='./corpus1_train.labels')
-    parser.add_argument('--output_path', type=str, default='./output.labels')
-    parser.add_argument('--test_path', type=str, default='./corpus1_test.list')
-    parser.add_argument('--validate', type=bool, default=False)
+    parser.add_argument('--input_path', type=str, default='./corpus1_train.labels', help='training file path')
+    parser.add_argument('--test_path', type=str, default='./corpus1_test.list', help='testing file path')
+    parser.add_argument('--output_path', type=str, default='./output.labels', help='file path for output predictions')
+    parser.add_argument('--validate', default=False, action='store_true', help='cross-validate on the training data. '
+                                                                               'ignores test and output paths')
     return parser.parse_args()
 
 
@@ -566,8 +572,10 @@ if __name__ == '__main__':
         r.train(X, y)
 
         # test the model on the
+        print('')
         print('Predicting labels for test data from: {}'.format(args.test_path))
         testing = DataReader(args.test_path)
         X_te, _ = testing.get_data()
         r.test(X_te, write_out=True, write_path=args.output_path)
+        print('')
         print('Output saved to: {}'.format(args.output_path))
