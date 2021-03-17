@@ -329,7 +329,7 @@ class VectorModel(CommonOperations):
 
 
 class Rocchio(CommonOperations):
-    def __init__(self, k):
+    def __init__(self, k=0.2):
         self.compound_tokenizer = CompoundTokenizer()
         self.vm = VectorModel(self.compound_tokenizer, k)
 
@@ -381,7 +381,7 @@ class Rocchio(CommonOperations):
         vm_weights = self.vm.get_test_weights(doc_paths)
         predictions = []
         # loop over the test documents
-        for doc_w in tqdm(vm_weights, position=0):
+        for doc_w in tqdm(vm_weights, position=1, leave=False, desc='Evaluation:'):
             # for each document calculate the
             cat_similarities = []
             for label in self.available_labels:
@@ -438,6 +438,40 @@ class Rocchio(CommonOperations):
         self.vm.load_from_dict(packet['vm'])
 
 
+class CrossValidator:
+    def __init__(self, k_fold=6, model=Rocchio):
+        self.k_fold = k_fold
+        self.model = model
+        self.skf = StratifiedKFold(n_splits=k_fold, shuffle=True, random_state=SEED)
+        self.accuracies = []
+
+    def validate(self, x, labels):
+        """
+        Tunes a single model parameter based on an input parameter list and stratified cross validation
+        :param x: (list of str) list of document paths
+        :param labels: (list of str) list of document labels
+        :param param: (iterable) parameter values to test model on
+        :return: (model) trained model trained with the best-parameter found through stratified cross validation
+        """
+
+        # Stratified K-fold cross validation
+        for k_f, (train_idx, test_idx) in tqdm(enumerate(self.skf.split(x, labels)),
+                                               total=self.k_fold, position=0, desc='Cross-Validation'):
+            # set the training and validation data & labels
+            x_tr = [x[i] for i in train_idx]
+            x_te = [x[i] for i in test_idx]
+            y_tr = [labels[i] for i in train_idx]
+            y_te = [labels[i] for i in test_idx]
+
+            # initialize and train model
+            r1 = self.model()
+            r1.train(x_tr, y_tr)
+            # add accuracy to array
+            self.accuracies.append(evaluate(r1, x_te, y_te))
+
+        return self.accuracies
+
+
 class ParameterTuner:
     def __init__(self, k_fold=6, model=Rocchio):
         self.k_fold = k_fold
@@ -458,19 +492,19 @@ class ParameterTuner:
 
         # Stratified K-fold cross validation
         for k_f, (train_idx, test_idx) in tqdm(enumerate(self.skf.split(x, labels)),
-                                               total=self.k_fold, position=0):
-            for p_idx, p in enumerate(param):
-                # set the training and validation data & labels
-                x_tr = [x[i] for i in train_idx]
-                x_te = [x[i] for i in test_idx]
-                y_tr = [labels[i] for i in train_idx]
-                y_te = [labels[i] for i in test_idx]
+                                               total=self.k_fold, position=0, desc='Cross-Validation'):
+            # set the training and validation data & labels
+            x_tr = [x[i] for i in train_idx]
+            x_te = [x[i] for i in test_idx]
+            y_tr = [labels[i] for i in train_idx]
+            y_te = [labels[i] for i in test_idx]
 
+            for p_idx, p in enumerate(param):
                 # initialize and train model
                 r1 = self.model(p)
                 r1.train(x_tr, y_tr)
                 # add accuracy to array
-                self.accuracies[k_f, p_idx] = self.evaluate(r1, x_te, y_te)
+                self.accuracies[k_f, p_idx] = evaluate(r1, x_te, y_te)
 
         # Save the best parameter
         self.best_param = param[self.accuracies.mean(axis=0).argmax()]
@@ -478,19 +512,19 @@ class ParameterTuner:
         # return a trained model on the best parameter - trained on all the data
         best_model = self.model(self.best_param)
         best_model.train(x, labels)
-        return best_model
+        return best_model, self.accuracies
 
-    @staticmethod
-    def evaluate(model, x, labels):
-        """
-        Evaluate a model's accuracy on a test set
-        :param model: (model) model to evaluate
-        :param x: (list of str) list of test data
-        :param labels: (list of str) list of test labels
-        """
-        predictions = model.test(x)
-        correct = np.array([prediction == labels[i] for i, prediction in enumerate(predictions)])
-        return correct.mean()
+
+def evaluate(model, x, labels):
+    """
+    Evaluate a model's accuracy on a test set
+    :param model: (model) model to evaluate
+    :param x: (list of str) list of test data
+    :param labels: (list of str) list of test labels
+    """
+    predictions = model.test(x)
+    correct = np.array([prediction == labels[i] for i, prediction in enumerate(predictions)])
+    return correct.mean()
 
 
 def get_args():
@@ -502,6 +536,7 @@ def get_args():
     parser.add_argument('--input_path', type=str, default='./corpus1_train.labels')
     parser.add_argument('--output_path', type=str, default='./output.labels')
     parser.add_argument('--test_path', type=str, default='./corpus1_test.list')
+    parser.add_argument('--validate', type=bool, default=False)
 
     return parser.parse_args()
 
@@ -525,13 +560,20 @@ if __name__ == '__main__':
     # tuner = ParameterTuner(k_fold=K_fold)
     # r = tuner.tune(X, y, Ks)
 
-    print('Training model...')
-    r = Rocchio(0.2)
-    r.train(X, y)
+    if args.validate:
+        val = CrossValidator()
+        accuracies = val.validate(X, y)
+        print('Output Accuracies: {}'.format(accuracies))
+        print('Average Accuracy: {}'.format(np.array(accuracies).mean()))
 
-    # test the model on the
-    print('Predicting labels for test data from: {}'.format(args.test_path))
-    testing = DataReader(args.test_path)
-    X_te, _ = testing.get_data()
-    r.test(X_te, write_out=True, write_path=args.output_path)
-    print('Output saved to: {}'.format(args.output_path))
+    else:
+        print('Training model...')
+        r = Rocchio()
+        r.train(X, y)
+
+        # test the model on the
+        print('Predicting labels for test data from: {}'.format(args.test_path))
+        testing = DataReader(args.test_path)
+        X_te, _ = testing.get_data()
+        r.test(X_te, write_out=True, write_path=args.output_path)
+        print('Output saved to: {}'.format(args.output_path))
