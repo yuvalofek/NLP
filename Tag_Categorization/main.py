@@ -53,7 +53,6 @@ class CompoundTokenizer:
         self.stemmer = nltk.stem.lancaster.LancasterStemmer()
         self.stop_words = list(nltk.corpus.stopwords.words('english'))
         self.stop_words.extend(more_stop_words)
-        self.lemmatizer = nltk.stem.WordNetLemmatizer()
 
     def __call__(self, document_str):
         # get the tokens
@@ -72,6 +71,9 @@ class CommonOperations:
 
     @staticmethod
     def unique(list1):
+        """
+        Return a list of all the unique elements in the input list
+        """
         # initialize a null list
         unique_list = []
         # traverse for all elements
@@ -84,7 +86,7 @@ class CommonOperations:
     @staticmethod
     def normalize_dict(dict1):
         """
-        normalize the values of the dictionary to have norm 1
+        Normalize the values of the dictionary to have norm 1
         """
         norm = np.sqrt(np.sum(np.array(list(dict1.values())) ** 2))
         d = {key: value / norm for key, value in dict1.items()}
@@ -92,6 +94,9 @@ class CommonOperations:
 
     @staticmethod
     def argmax(lst):
+        """
+        List argmax - returns the index of the largest element in the list
+        """
         # In terms of equality, we pick the first time the max was reached
         argument_max = -1
         max_v = -1
@@ -103,20 +108,25 @@ class CommonOperations:
 
 
 class VectorModel(CommonOperations):
-    def __init__(self, comp_tokenizer, k):
-        # token creating
-        self.synonym_map = defaultdict(list)
+    def __init__(self, comp_tokenizer, k=0.2):
+        # vector model parameters
         self.complex_tokenizer = comp_tokenizer
-        self.idfs = None
-        self.weights = None
         self.k = k
         self.drop_percentile = 3
+
+        # storage
+        self.idfs = None
+        self.weights = None
+
+        # synonym mapping
+        self.synonym_map = defaultdict(list)
         self.substitute_synonyms = True
 
-    def get_doc_tf(self, path, sub_syns=False):
+    def get_doc_tf(self, path, sub_synonyms=False):
         """
         Reads in a document and returns its term frequencies
-        :param path: document path
+        :param path: (str) document path
+        :param sub_synonyms: (bool) substitute tokens with synonyms in self.synonym_map
         :return: term frequencies for the document
         """
         # From a document path, get the documents tokens tf's
@@ -127,9 +137,10 @@ class VectorModel(CommonOperations):
         tokens = self.complex_tokenizer(value)
 
         # if we want to substitute input words for their synonyms in the training synonym mapping
-        if sub_syns:
+        if sub_synonyms:
             for idx, token in enumerate(tokens):
                 tokens[idx] = self.synonym_map.get(token)
+
         # count the occurrences of each word
         word_counts = dict(Counter(tokens))
         num_tokens = len(tokens)
@@ -141,7 +152,7 @@ class VectorModel(CommonOperations):
         """
         Reads in all the documents in the input document path list, gets each document's term frequencies, then
         calculates input idfs and calculates each document's weight vector
-        :param doc_paths: a list of document paths
+        :param doc_paths: (list of str) a list of document paths
         """
         # Number of documents
         n = len(doc_paths)
@@ -151,9 +162,10 @@ class VectorModel(CommonOperations):
 
         # Get IDFs for all words seen
         # list of lists of the words seen in each document
-        words = [list(d.keys()) for d in corp_tfs]
-        # to one list (where the words repeat if in multiple docs)
-        words = [item for sublist in words for item in sublist]
+        words = []
+        for document in corp_tfs:
+            words.extend(list(document.keys()))
+
         words = Counter(words)
         self.idfs = {key: np.log(n / val) for key, val in words.items()}
 
@@ -231,7 +243,7 @@ class VectorModel(CommonOperations):
         """
         # check that we have the trained idfs
         assert (self.idfs is not None)
-        tfs = [self.get_doc_tf(doc, sub_syns=False) for doc in doc_paths]
+        tfs = [self.get_doc_tf(doc, sub_synonyms=False) for doc in doc_paths]
 
         test_weights = []
         for doc_TFs in tfs:
