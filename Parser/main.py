@@ -7,13 +7,15 @@ class GrammarLoader:
     def __init__(self, grammar_path):
         self.rules = []
         with open(grammar_path) as f:
+            logging.info('Grammar file opened')
             for line in f.readlines():
                 ln = line.split(' --> ')
                 right_arrow = re.sub('\n', '', ln[1])
                 self.rules.append((ln[0], right_arrow.split(' ')))
 
         logging.debug(self.rules)
-        logging.info('Grammar Rules Created')
+        logging.info('Grammar rules created')
+
 
 class Parser:
     def __init__(self, grammar):
