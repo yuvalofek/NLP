@@ -16,6 +16,7 @@ class Parser:
     def __init__(self, grammar):
         self.table = None
         self.grammar = self.load_grammar(grammar)
+        self.should_indent = False
 
     @staticmethod
     def load_grammar(grammar_file):
@@ -36,9 +37,12 @@ class Parser:
                 right_side = right_side.split(' ')
                 # add to grammar dictionary
                 grammar[left_side].append(right_side)
-        logging.debug(grammar)
-        logging.info('Grammar rules created')
+        logging.debug('Grammar loaded: {}'.format(grammar))
         return grammar
+
+    def configure_printing(self, should_indent):
+        self.should_indent = should_indent
+        logging.info('should_indent updated to : {}'.format(self.should_indent))
 
     def parse(self, sentence):
         # sentence to list of words
@@ -51,16 +55,15 @@ class Parser:
         table = [[[] for _ in range(n + 1)] for _ in range(n + 1)]
         table2 = [[[] for _ in range(n + 1)] for _ in range(n + 1)]
 
-        for j in range(1, n+1):
+        for j in range(1, n + 1):
             logging.debug('j = {j}'.format(j=j))
-            word = sentence_[j-1]
+            word = sentence_[j - 1]
             # {A| A ---> word in grammar}
             for left_side, right_side in self.grammar.items():
-                logging.debug('word: {}, rule: {}'.format(word, right_side))
                 if [word] in right_side:
-                    logging.info('Word in grammar rules')
-                    table[j-1][j].append(left_side)
-                    table2[j-1][j].append(Node(left_side, None, None, word))
+                    logging.debug('word in grammar rules: {}, rule: {}'.format(word, right_side))
+                    table[j - 1][j].append(left_side)
+                    table2[j - 1][j].append(Node(left_side, None, None, word))
 
             for i in range(j - 2, -1, -1):  # j-2 to 0
                 logging.debug('i={i}'.format(i=i))
@@ -77,38 +80,61 @@ class Parser:
                                 logging.debug('table[i][k]: {}, table[k][j]: {}'.format(table[i][k], table[k][j]))
                                 if B in table[i][k] and C in table[k][j]:
                                     table[i][j].append(left_side)
-                                    logging.info('Rule added to table[{i}][{j}]:{rule}'.format(i=i, j=j, rule=left_side))
+                                    logging.info(
+                                        'Rule added to table[{i}][{j}]:{rule}'.format(i=i, j=j, rule=left_side))
                                     for b in table2[i][k]:
                                         for c in table2[k][j]:
                                             if b.root == B and c.root == C:
                                                 table2[i][j].append(Node(left_side, b, c, None))
-                                                logging.info('Node added to table2[{i}][{j}]:{rule}'.format(i=i, j=j, rule=left_side))
-        logging.debug('Parse tree: {tree}'.format(tree=table))
-        logging.debug('Parse tree2: {tree}'.format(tree=table2))
-        self.print_parse_trees(table2[0][n], 1)
+                                                logging.info('Node added to table2[{i}][{j}]:{rule}'.format(i=i, j=j,
+                                                                                                            rule=left_side))
+        logging.debug('Rule parse tree: {tree}'.format(tree=table))
+        logging.debug('Node parse tree: {tree}'.format(tree=table2))
+        self.print_parse_trees(table2[0][n], self.should_indent)
 
-    def get_parse_tree(self, root, indent):
-        if root.status:
-            return '(' + root.root + ' ' + root.terminal + ')'
+    def get_parse_tree(self, root, indent, should_indent):
+        """
+        recursively print out the parse tree
+        """
+        if root.terminal is not None:
+            # end condition -> got to a terminal node
+            return '[' + root.root + ' ' + root.terminal + ']'
 
-        # Calculates the new indent factors that we need to pass forward.
-        new1 = indent + 2 + len(root.left.root)  # len(tree[1][0])
-        new2 = indent + 2 + len(root.right.root)  # len(tree[2][0])
-        left = self.get_parse_tree(root.left, new1)
-        right = self.get_parse_tree(root.right, new2)
-        return '(' + root.root + ' ' + left + '\n' \
-               + ' ' * indent + right + ')'
+        # if we want to tab the
+        if should_indent:
+            new1 = indent + 2
+            new2 = indent + 2
+            left = self.get_parse_tree(root.left, new1, should_indent)
+            right = self.get_parse_tree(root.right, new2, should_indent)
+            return '[' + root.root + '\n' + ' ' * indent + right + '\n'\
+                   + ' ' * indent + left + '\n' + ' '*(indent-2) + ']'
+        else:
+            left = self.get_parse_tree(root.left, 0, should_indent)
+            right = self.get_parse_tree(root.right, 0, should_indent)
+            return '[' + root.root + ' ' + right + ' ' + left + ']'
 
-    def print_parse_trees(self, nodes_back, indent):
+    def print_parse_trees(self, nodes_back, should_indent):
+        logging.info('Printing out the tree ' + 'with' if should_indent else 'without' + ' indents')
+        # initialize
         check = False
+        parse_counter = 0
+        # for the nodes
         for node in nodes_back:
+            # if we have a valid parse
             if node.root == 'S':
-                print(self.get_parse_tree(node, indent*3))
+                logging.info('Parse found!')
+                # print out the parse
+                print(self.get_parse_tree(node, 3, should_indent))
                 print()
                 check = True
+                # increment the count of valid parses
+                parse_counter += 1
 
         if not check:
+            logging.info('No parses found')
             print('NO VALID PARSES')
+        else:
+            print('Number of valid parses: {}'.format(parse_counter))
 
 
 def get_args():
@@ -123,7 +149,7 @@ def get_args():
 
 if __name__ == '__main__':
     # configure logging
-    logging.basicConfig(filename='./parser.log', level=logging.DEBUG, filemode='w')
+    logging.basicConfig(filename='./parser.log', level=logging.INFO, filemode='w')
     logging.info('Started')
 
     # get grammar file path
@@ -136,7 +162,8 @@ if __name__ == '__main__':
     # prompt for how to print parse trees
     parse_tree_config = input('Do you want textual parse trees to be displayed (y/n)?: ')
     parse_tree_config = parse_tree_config == 'y'
-    logging.info('Parse trees displayed: '+str(parse_tree_config))
+    logging.info('Parse trees displayed: ' + str(parse_tree_config))
+    parser.configure_printing(parse_tree_config)
 
     # work loop
     while True:
