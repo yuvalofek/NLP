@@ -15,11 +15,15 @@ class Node:
 class Parser:
     def __init__(self, grammar):
         self.table = None
-        self.grammar = self.load_grammar(grammar)
         self.should_indent = False
+        self.split_on = ' --> '
+        self.grammar = self.load_grammar(grammar)
 
-    @staticmethod
-    def load_grammar(grammar_file):
+    def load_grammar(self, grammar_file):
+        """
+        Load grammar rules in CNF onto a dictionary. The left side of the rule is
+        saved as a key and the right side is a part of a list (for the corresponding key).
+        """
         grammar = defaultdict(list)
         with open(grammar_file) as f:
             logging.info('Grammar file opened')
@@ -28,8 +32,9 @@ class Parser:
                 if line[0] == '#':
                     logging.info('Grammar file comment skipped')
                     continue
+
                 # for content lines:
-                rule = line.split(' --> ')
+                rule = line.split(self.split_on)
                 # strip any un-needed characters
                 left_side = rule[0].strip()
                 right_side = rule[1].strip()
@@ -37,22 +42,31 @@ class Parser:
                 right_side = right_side.split(' ')
                 # add to grammar dictionary
                 grammar[left_side].append(right_side)
+
         logging.debug('Grammar loaded: {}'.format(grammar))
         return grammar
 
     def configure_printing(self, should_indent):
+        """
+        Set should_indent to determine whether or not to indent when printing the tree.
+        """
         self.should_indent = should_indent
         logging.info('should_indent updated to : {}'.format(self.should_indent))
 
     def parse(self, sentence):
+        """
+        Parse a sentence using the CKY algorithm and print out a parse tree
+        """
         # sentence to list of words
         sentence_ = sentence.split(' ')
         logging.info('Sentence split into: {}'.format(sentence_))
         # count of the number of words
         n = len(sentence_)
 
-        # initialize table for parsing
+        # initialize tables for parsing
+        # for rules
         table = [[[] for _ in range(n + 1)] for _ in range(n + 1)]
+        # for nodes used to parse back
         table2 = [[[] for _ in range(n + 1)] for _ in range(n + 1)]
 
         for j in range(1, n + 1):
@@ -82,6 +96,7 @@ class Parser:
                                     table[i][j].append(left_side)
                                     logging.info(
                                         'Rule added to table[{i}][{j}]:{rule}'.format(i=i, j=j, rule=left_side))
+                                    # growing the parse tree
                                     for b in table2[i][k]:
                                         for c in table2[k][j]:
                                             if b.root == B and c.root == C:
@@ -90,6 +105,7 @@ class Parser:
                                                                                                             rule=left_side))
         logging.debug('Rule parse tree: {tree}'.format(tree=table))
         logging.debug('Node parse tree: {tree}'.format(tree=table2))
+        # print out the output parse
         self.print_parse_trees(table2[0][n], self.should_indent)
 
     def get_parse_tree(self, root, indent, should_indent):
@@ -114,6 +130,9 @@ class Parser:
             return '[' + root.root + ' ' + right + ' ' + left + ']'
 
     def print_parse_trees(self, nodes_back, should_indent):
+        """
+        Use the parse output to print out parse tree and display other useful information
+        """
         logging.info('Printing out the tree ' + 'with' if should_indent else 'without' + ' indents')
         # initialize
         check = False
@@ -161,9 +180,8 @@ if __name__ == '__main__':
 
     # prompt for how to print parse trees
     parse_tree_config = input('Do you want textual parse trees to be displayed (y/n)?: ')
-    parse_tree_config = parse_tree_config == 'y'
-    logging.info('Parse trees displayed: ' + str(parse_tree_config))
-    parser.configure_printing(parse_tree_config)
+    # allowing anything not 'y' in as an 'n' (for convenience)
+    parser.configure_printing(parse_tree_config == 'y')
 
     # work loop
     while True:
@@ -171,10 +189,12 @@ if __name__ == '__main__':
         sent = input('Enter a sentence: ')
         logging.info('Sentence input found: {sent}'.format(sent=sent))
 
+        # if we got a quit message
         if sent == 'quit':
             logging.info('Quit detected')
             break
 
+        # parse the sentence
         parser.parse(sent)
         logging.info('Sentence Parsed')
 
