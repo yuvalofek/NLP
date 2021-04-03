@@ -7,5 +7,6 @@ This course focuses on computational applications involving the processingof wri
 Each in their own respective folder
 ### 1. [Tag Categorization](https://github.com/yuvalofek/NLP/tree/main/Tag_Categorization) 
 > Given a training corpus of labeled documents, learn to predict these labels for a new corpus
-### 2. Sentence Parser
+### 2. [Sentence Parser](https://github.com/yuvalofek/NLP/tree/main/Parser)
+> Parses sentences using grammar rules in Chomsky normal form
 ### 3. N/A
