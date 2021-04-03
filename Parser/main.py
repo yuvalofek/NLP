@@ -168,7 +168,7 @@ def get_args():
 
 if __name__ == '__main__':
     # configure logging
-    logging.basicConfig(filename='./parser.log', level=logging.INFO, filemode='w')
+    logging.basicConfig(filename='./parser.log', level=logging.NOTSET, filemode='w')
     logging.info('Started')
 
     # get grammar file path
