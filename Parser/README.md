@@ -16,6 +16,9 @@ Sample grammar file: http://faculty.cooper.edu/sable2/courses/spring2021/ece467/
 * Output parses should be in bracketed notation
 * User should be given the option of displaying output in one-line brackets or as textual parse trees
 
+### CKY algorithm
+![alt CKY algorithm](https://github.com/yuvalofek/NLP/blob/main/Parser/CKY.JPG)
+
 ### Sample Desired Outputs
 ```
 Loading grammar...
