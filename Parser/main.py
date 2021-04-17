@@ -1,7 +1,6 @@
 import argparse
 import logging
 from collections import defaultdict
-import time
 
 
 class Node:
@@ -96,13 +95,14 @@ class Parser:
                                     table[i][j].append(left_side)
                                     logging.info(
                                         'Rule added to table[{i}][{j}]:{rule}'.format(i=i, j=j, rule=left_side))
-                                    # growing the parse tree
+                                    # growing the backward parse tree
                                     for b in table2[i][k]:
                                         for c in table2[k][j]:
                                             if b.root == B and c.root == C:
                                                 table2[i][j].append(Node(left_side, b, c, None))
-                                                logging.info('Node added to table2[{i}][{j}]:{rule}'.format(i=i, j=j,
-                                                                                                            rule=left_side))
+                                                logging.info('Node in table2[{i}][{j}]:{rule}'.format(i=i,
+                                                                                                      j=j,
+                                                                                                      rule=left_side))
         logging.debug('Rule parse tree: {tree}'.format(tree=table))
         logging.debug('Node parse tree: {tree}'.format(tree=table2))
         # print out the output parse
@@ -117,17 +117,13 @@ class Parser:
             return '[' + root.root + ' ' + root.terminal + ']'
 
         # if we want to tab the
-        if should_indent:
-            new1 = indent + 2
-            new2 = indent + 2
-            left = self.get_parse_tree(root.left, new1, should_indent)
-            right = self.get_parse_tree(root.right, new2, should_indent)
-            return '[' + root.root + '\n' + ' ' * indent + right + '\n'\
-                   + ' ' * indent + left + '\n' + ' '*(indent-2) + ']'
-        else:
-            left = self.get_parse_tree(root.left, 0, should_indent)
-            right = self.get_parse_tree(root.right, 0, should_indent)
-            return '[' + root.root + ' ' + right + ' ' + left + ']'
+        indent = indent*should_indent
+        new_indent = should_indent * (indent + 2)
+        left = self.get_parse_tree(root.left, new_indent, should_indent)
+        right = self.get_parse_tree(root.right, new_indent, should_indent)
+        newline = should_indent*'\n'
+        return '[' + root.root + newline + ' ' * (indent+1) + right + newline \
+               + ' ' * (indent+1) + left + newline + ' ' * (indent - 2)*should_indent + ']'
 
     def print_parse_trees(self, nodes_back, should_indent):
         """
