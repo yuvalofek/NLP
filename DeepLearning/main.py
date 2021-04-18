@@ -101,11 +101,15 @@ def get_args():
     """
     parse = argparse.ArgumentParser()
     parse.add_argument('--data', type=str, default='./sentiment_data.csv', help='training file path')
-
-    return parse.parse_args()
+    parsed = parse.parse_args()
+    logging.info('parsed arguments')
+    return parsed
 
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='./sentiment_analysis.log', level=logging.INFO, filemode='w')
+    logging.info('Started')
+
     # length of input dataset
     N = 10000
     args = get_args()
@@ -122,3 +126,4 @@ if __name__ == '__main__':
     plt.hist(word_count)
     plt.show()
     # we see that the max word count is under 30 words
+    logging.info('Finished')
