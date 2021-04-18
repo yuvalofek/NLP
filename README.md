@@ -11,4 +11,6 @@ Each in their own respective folder
 > Given a training corpus of labeled documents, learn to predict these labels for a new corpus
 ### 2. [Sentence Parser](https://github.com/yuvalofek/NLP/tree/main/Parser)
 > Parses sentences using grammar rules in Chomsky normal form
-### 3. N/A
+### 3. Deep Learning Project
+> Use a deep learning framework to complete any NLP related project
+
