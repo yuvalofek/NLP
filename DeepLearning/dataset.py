@@ -92,8 +92,7 @@ class Dataset:
         text = text.translate(string.punctuation)
         # tokenize, remove stop words, & stem
         tokens = self.tokenizer.tokenize(text)
-        tokens = [w for w in tokens if w not in self.stop_words]
-        tokens = [self.lemmatizer.lemmatize(w) for w in tokens]
+        tokens = [self.lemmatizer.lemmatize(w) for w in tokens if w not in self.stop_words]
         logging.debug('{} preprocessed'.format(text))
         return tokens
 
