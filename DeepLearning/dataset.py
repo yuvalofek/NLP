@@ -127,7 +127,7 @@ def get_args():
     """
     parse = argparse.ArgumentParser()
     parse.add_argument('--data_path', type=str, default='./sentiment_data.csv', help='training file path')
-    parse.add_argument('--size', type=int, default=None, help='total number of tweets in final dataset')
+    parse.add_argument('--size', type=int, default=500_000, help='total number of tweets in final dataset')
     parse.add_argument('--test_split', type=float, default=0.2, help='fraction of dataset to save for test set')
     parsed = parse.parse_args()
     logging.info('parsed arguments')
