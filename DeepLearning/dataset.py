@@ -13,13 +13,6 @@ import string
 import nltk
 from sklearn.model_selection import train_test_split
 
-# viz
-import matplotlib.pyplot as plt
-
-# ml
-from sklearn.model_selection import StratifiedKFold
-
-
 # Set up stop words
 nltk.download('stopwords', quiet=True)
 more_stop_words = ['could', "he'd", "he'll", "he's", "here's", "how's", "i'd", "i'll", "i'm", "i've", "let's", 'ought',
@@ -30,6 +23,7 @@ stop_words.extend(more_stop_words)
 
 """
 dataset: https://www.kaggle.com/kazanova/sentiment140
+1.6 Million tweets
 
 It contains the following 6 fields:
 
@@ -43,7 +37,7 @@ target: the polarity of the tweet (0 = negative, 2 = neutral, 4 = positive)
 
 
 class Dataset:
-    def __init__(self, dataset_size=None):
+    def __init__(self, dataset_size=None, test_split=0.2):
         # Url regex courtesy of https://stackoverflow.com/questions/3809401/what-is-a-good-regular-expression-to
         # -match-a-url
         self.urlPattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}" \
@@ -57,11 +51,12 @@ class Dataset:
 
         # init parameters
         self.dataset_size = dataset_size
-        self.test_split = 0.2
+        self.test_split = test_split
 
         # unset
         self.data = None
         self.X_train, self.X_test, self.y_train, self.y_test = None, None, None, None
+
         logging.info('Dataset object initialized')
 
     def load_data(self, file_path):
@@ -110,9 +105,9 @@ class Dataset:
 
     def split_dataset(self):
         test_size = int(self.dataset_size*self.test_split)
-        X = self.data['text'].tolist()
+        x = self.data['text'].tolist()
         y = self.data['polarity'].tolist()
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X,
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(x,
                                                                                 y,
                                                                                 test_size=test_size,
                                                                                 stratify=y)
@@ -132,7 +127,9 @@ def get_args():
     Parse flags
     """
     parse = argparse.ArgumentParser()
-    parse.add_argument('--data', type=str, default='./sentiment_data.csv', help='training file path')
+    parse.add_argument('--data_path', type=str, default='./sentiment_data.csv', help='training file path')
+    parse.add_argument('--size', type=int, default=None, help='total number of tweets in final dataset')
+    parse.add_argument('--test_split', type=float, default=0.2, help='fraction of dataset to save for test set')
     parsed = parse.parse_args()
     logging.info('parsed arguments')
     return parsed
@@ -141,14 +138,12 @@ def get_args():
 if __name__ == '__main__':
     logging.basicConfig(filename='./sentiment_analysis.log', level=logging.INFO, filemode='w')
     logging.info('Started')
-    # length of input dataset
-    num_tweets = 10_000
-
     args = get_args()
 
-    dataset = Dataset(dataset_size=num_tweets)
+    print('Initializing...')
+    dataset = Dataset(dataset_size=args.size, test_split=args.test_split)
     print('Loading data...')
-    dataset.load_data(args.data)
+    dataset.load_data(file_path=args.data_path)
     print('preprocessing...')
     dataset.preprocess_dataset()
     print('Making train and test sets...')
