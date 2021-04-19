@@ -43,7 +43,7 @@ target: the polarity of the tweet (0 = negative, 2 = neutral, 4 = positive)
 
 
 class Dataset:
-    def __init__(self, dataset_size):
+    def __init__(self, dataset_size=None):
         # Url regex courtesy of https://stackoverflow.com/questions/3809401/what-is-a-good-regular-expression-to
         # -match-a-url
         self.urlPattern = r"https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}" \
@@ -53,7 +53,7 @@ class Dataset:
         # preprocessing
         self.tokenizer = nltk.tokenize.RegexpTokenizer(r'\w+',)
         self.stop_words = stop_words
-        self.stemmer = nltk.stem.lancaster.LancasterStemmer()
+        self.lemmatizer = nltk.stem.wordnet.WordNetLemmatizer()
 
         # init parameters
         self.dataset_size = dataset_size
@@ -79,10 +79,11 @@ class Dataset:
         data['polarity'] = data['polarity'].replace(4, 1)
 
         # shuffle
-        data = data.sample(frac=1).reset_index(drop=True)
+        self.data = data.sample(frac=1).reset_index(drop=True)
 
         # crop length
-        self.data = data[:self.dataset_size]
+        if self.dataset_size is not None:
+            self.data = self.data[:min(self.dataset_size, len(self.data))]
         logging.info('data loaded')
         return self.data
 
@@ -97,34 +98,33 @@ class Dataset:
         # tokenize, remove stop words, & stem
         tokens = self.tokenizer.tokenize(text)
         tokens = [w for w in tokens if w not in self.stop_words]
-        tokens = [self.stemmer.stem(w) for w in tokens]
+        tokens = [self.lemmatizer.lemmatize(w) for w in tokens]
         logging.debug('{} preprocessed'.format(text))
         return tokens
 
     def preprocess_dataset(self):
         self.data['text'] = self.data['text'].apply(lambda x: self.preprocess_tweet(x))
+        # conveniently this also pads the text
         logging.info('dataset preprocessed')
         return
 
     def split_dataset(self):
         test_size = int(self.dataset_size*self.test_split)
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.data['text'].tolist(),
-                                                                                self.data['polarity'].tolist(),
+        X = self.data['text'].tolist()
+        y = self.data['polarity'].tolist()
+        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(X,
+                                                                                y,
                                                                                 test_size=test_size,
-                                                                                stratify=True)
+                                                                                stratify=y)
         self.data = None
         logging.info('dataset split')
 
-    def save_dataset(self, train_path='./train.csv', test_path='/test.csv'):
+    def save_dataset(self, train_path='./train.csv', test_path='./test.csv'):
         train = pd.DataFrame(self.X_train, self.y_train)
         test = pd.DataFrame(self.X_test, self.y_test)
         train.to_csv(train_path)
         test.to_csv(test_path)
         logging.info('training and testing datasets saved')
-
-
-def check_word_count(text):
-    return len(text)
 
 
 def get_args():
@@ -142,24 +142,18 @@ if __name__ == '__main__':
     logging.basicConfig(filename='./sentiment_analysis.log', level=logging.INFO, filemode='w')
     logging.info('Started')
     # length of input dataset
-    num_tweets = 10000
+    num_tweets = 10_000
 
     args = get_args()
 
     dataset = Dataset(dataset_size=num_tweets)
+    print('Loading data...')
     dataset.load_data(args.data)
-
+    print('preprocessing...')
     dataset.preprocess_dataset()
-    print(dataset.data)
-
-    '''
-    word_count = dataset.data['text'].apply(check_word_count)
-    
-    plt.figure()
-    plt.hist(word_count)
-    plt.show()
-    # we see that the max word count is under 30 words
-    '''
+    print('Making train and test sets...')
     dataset.split_dataset()
-
+    print('Saving...')
+    dataset.save_dataset()
+    print('Done!')
     logging.info('Finished')
