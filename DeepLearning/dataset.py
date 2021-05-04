@@ -94,7 +94,7 @@ class Dataset:
         tokens = self.tokenizer.tokenize(text)
         tokens = [self.lemmatizer.lemmatize(w) for w in tokens if w not in self.stop_words]
         logging.debug('{} preprocessed'.format(text))
-        return tokens
+        return (' ').join(tokens)
 
     def preprocess_dataset(self):
         self.data['text'] = self.data['text'].apply(lambda x: self.preprocess_tweet(x))
