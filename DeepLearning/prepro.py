@@ -8,6 +8,7 @@ class Preprocessor:
         self.max_vocab = max_vocab
         self.vocab2enc = None
         self.enc2vocab = None
+        self.max_len = 0
 
     def fit(self, dataset):
         words = list()
@@ -42,17 +43,15 @@ class Preprocessor:
             encoded.append(list([item[0], ' '.join(encoding).strip()]))
         return SentimentDataset(data=encoded, data_from_file=False)
 
-    @staticmethod
-    def pad(dataset):
-        max_len = 0
+    def pad(self, dataset):
         for i in range(len(dataset)):
             item = dataset.getitem(i)
-            if len(item[1]) > max_len:
-                max_len = len(item[1])
+            if len(item[1]) > self.max_len:
+                self.max_len = len(item[1])
         padded_data = list()
         for i in range(len(dataset)):
             item = dataset.getitem(i)
-            padded_data.append([item[0], item[1].extend([0 for _ in range(max_len-len(item[1]))])])
+            padded_data.append([item[0], item[1].extend([0 for _ in range(self.max_len-len(item[1]))])])
         return SentimentDataset(data=padded_data, data_from_file=False)
 
     def transform(self, dataset):
@@ -69,14 +68,15 @@ class Preprocessor:
             json.dump({
                 'vocab2enc': self.vocab2enc,
                 'enc2vocab': self.enc2vocab,
+                'max_len': self.max_len,
             }, f_out)
 
     def load(self, file_name='./prepro_vocab.json'):
         with open(file_name, 'r') as f_in:
             data = json.load(f_in)
-
         self.vocab2enc = data['vocab2enc']
         self.enc2vocab = data['enc2vocab']
+        self.max_len = data['max_len']
 
 
 # if __name__ == '__main__':
