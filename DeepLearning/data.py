@@ -36,6 +36,6 @@ class SentimentDataset:
         if self.validation is not None:
             val_x, val_y = [item[1] for item in self.validation], [item[0] for item in self.validation]
             val_x = np.array(val_x)
-            val_ds = TensorDataset(torch.FloatTensor(val_x), torch.FloatTensor(val_y))
+            val_ds = TensorDataset(torch.tensor(val_x, dtype=torch.long), torch.FloatTensor(val_y))
 
         return tr_ds, val_ds
