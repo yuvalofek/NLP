@@ -1,5 +1,5 @@
 import argparse
-import numpy as np
+from tqdm import tqdm
 import torch
 from torch.optim import Adam
 from torch.utils.data import DataLoader
@@ -9,30 +9,52 @@ from prepro import Preprocessor
 from model import SentimentModel
 
 
-def binary_cross_entropy(true, prediction):
-    return true*torch.log(prediction)+prediction*torch.log(true)
+def train(training, model, validation=None, optimizer=None, loss=torch.nn.BCELoss(), epochs=20):
+    if optimizer is None:
+        optimizer = Adam(model.parameters(), lr=0.01)
+    train_len = len(training)
+    for epoch in range(epochs):
+        epoch_loss = 0.0
+        with tqdm(enumerate(training), total=train_len, position=0) as t_epoch:
+            t_epoch.set_description("Epoch {:02}/{}".format(epoch+1, epochs))
+            for idx, (tweet, label) in t_epoch:
+                # zero the parameter gradients
+                optimizer.zero_grad()
+                model.zero_grad()
+
+                # forward pass
+                prediction = model(tweet)
+                # calculate loss
+                lss = loss(prediction.squeeze(), label.float())
+                # backward + optimize
+                lss.backward()
+                optimizer.step()
+
+                # running sum
+                epoch_loss += lss.item()
+                postfix = f'Training loss: {round(epoch_loss / (idx + 1), 4)}'
+                t_epoch.set_postfix_str(postfix)
+                break
+
+        if validation is not None:
+            test(validation, model, loss)
 
 
-def train(training, model, optimizer, loss):
+def test(testing, model, loss=torch.nn.BCELoss()):
+    test_len = len(testing)
     epoch_loss = 0.0
-    for idx, (tweet, label) in enumerate(training):
-        # get the true values & make into cuda if needed
+    with tqdm(enumerate(testing), total=test_len, position=0) as t_epoch:
+        t_epoch.set_description("Validation ")
+        for idx, (tweet, label) in t_epoch:
+            # forward pass
+            prediction = model(tweet)
+            # calculate loss
+            lss = loss(prediction.squeeze(), label.float())
 
-        # tweet = torch.tensor(tweet)
-        # zero the parameter gradients
-        optimizer.zero_grad()
-
-        # forward pass
-        prediction = model(tweet)
-        # calculate multi-loss
-        lss = loss(prediction.squeeze(), label.float())
-        # backward + optimize
-        lss.backward()
-        optimizer.step()
-
-        # running sum
-        epoch_loss += lss.item()
-        postfix = f'Training loss: {round(epoch_loss / (idx + 1), 4)}'
+            # running sum
+            epoch_loss += lss.item()
+            postfix = f'Validation loss: {round(epoch_loss / (idx + 1), 4)}'
+            t_epoch.set_postfix_str(postfix)
 
 
 def get_args():
@@ -55,6 +77,7 @@ if __name__ == '__main__':
     args = get_args()
 
     # make a dataset
+    print('Extracting dataset...')
     data = SentimentDataset(data=args.train_path)
 
     # preprocess and save word encodings
@@ -70,10 +93,12 @@ if __name__ == '__main__':
     train_set = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
     val_set = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
 
+    print('Initializing model...')
     mod = SentimentModel(len(preprocessor.vocab2enc)+3, args.embedding_dim, args.hidden_dim, args.batch_size)
     opt = Adam(mod.parameters(), lr=0.01)
 
-    train(train_set, mod, opt, torch.nn.BCELoss())
+    print('Training...')
+    train(training=train_set, model=mod, validation=val_set, optimizer=opt, loss=torch.nn.BCELoss())
 
 
 
