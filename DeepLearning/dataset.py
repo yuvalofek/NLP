@@ -92,14 +92,18 @@ class Dataset:
         text = text.translate(string.punctuation)
         # tokenize, remove stop words, & stem
         tokens = self.tokenizer.tokenize(text)
-        tokens = [w for w in tokens if w not in self.stop_words]
-        tokens = [self.lemmatizer.lemmatize(w) for w in tokens]
+        tokens = [self.lemmatizer.lemmatize(w) for w in tokens if w not in self.stop_words]
         logging.debug('{} preprocessed'.format(text))
-        return tokens
+
+        text = None
+        # don't want 1 word or no word tweets
+        if len(tokens) > 1:
+            text = ' '.join(tokens)
+        return text
 
     def preprocess_dataset(self):
         self.data['text'] = self.data['text'].apply(lambda x: self.preprocess_tweet(x))
-        # conveniently this also pads the text
+        self.data = self.data[self.data['text'].notna()]
         logging.info('dataset preprocessed')
         return
 
@@ -117,8 +121,8 @@ class Dataset:
     def save_dataset(self, train_path='./train.csv', test_path='./test.csv'):
         train = pd.DataFrame(self.X_train, self.y_train)
         test = pd.DataFrame(self.X_test, self.y_test)
-        train.to_csv(train_path)
-        test.to_csv(test_path)
+        train.to_csv(train_path, header=['label, text'])
+        test.to_csv(test_path, header=['label, text'])
         logging.info('training and testing datasets saved')
 
 
@@ -128,7 +132,7 @@ def get_args():
     """
     parse = argparse.ArgumentParser()
     parse.add_argument('--data_path', type=str, default='./sentiment_data.csv', help='training file path')
-    parse.add_argument('--size', type=int, default=None, help='total number of tweets in final dataset')
+    parse.add_argument('--size', type=int, default=500_000, help='total number of tweets in final dataset')
     parse.add_argument('--test_split', type=float, default=0.2, help='fraction of dataset to save for test set')
     parsed = parse.parse_args()
     logging.info('parsed arguments')
