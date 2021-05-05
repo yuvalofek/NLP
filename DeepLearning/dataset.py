@@ -94,11 +94,16 @@ class Dataset:
         tokens = self.tokenizer.tokenize(text)
         tokens = [self.lemmatizer.lemmatize(w) for w in tokens if w not in self.stop_words]
         logging.debug('{} preprocessed'.format(text))
-        return (' ').join(tokens)
+
+        text = None
+        # don't want 1 word or no word tweets
+        if len(tokens) > 1:
+            text = ' '.join(tokens)
+        return text
 
     def preprocess_dataset(self):
         self.data['text'] = self.data['text'].apply(lambda x: self.preprocess_tweet(x))
-        # conveniently this also pads the text
+        self.data = self.data[self.data['text'].notna()]
         logging.info('dataset preprocessed')
         return
 
@@ -116,8 +121,8 @@ class Dataset:
     def save_dataset(self, train_path='./train.csv', test_path='./test.csv'):
         train = pd.DataFrame(self.X_train, self.y_train)
         test = pd.DataFrame(self.X_test, self.y_test)
-        train.to_csv(train_path)
-        test.to_csv(test_path)
+        train.to_csv(train_path, header=['label, text'])
+        test.to_csv(test_path, header=['label, text'])
         logging.info('training and testing datasets saved')
 
 
