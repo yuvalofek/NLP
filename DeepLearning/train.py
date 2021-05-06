@@ -11,34 +11,42 @@ from prepro import Preprocessor
 from model import SentimentModel
 
 
-def train(training, model, validation=None, optimizer=None, loss=torch.nn.BCELoss(), epochs=20):
+def fit(training, model, validation=None, optimizer=None, loss=torch.nn.BCELoss(), epochs=20):
+    # if no optimizer, set one
     if optimizer is None:
         optimizer = Adam(model.parameters(), lr=0.01)
-    train_len = len(training)
+
     for epoch in range(epochs):
-        epoch_loss = 0.0
-        with tqdm(enumerate(training), total=train_len, position=0) as t_epoch:
-            t_epoch.set_description("Epoch {:02}/{}".format(epoch+1, epochs))
-            for idx, (tweet, label) in t_epoch:
-                # zero the parameter gradients
-                optimizer.zero_grad()
-                model.zero_grad()
-
-                # forward pass
-                prediction = model(tweet)
-                # calculate loss
-                lss = loss(prediction.squeeze(), label.float())
-                # backward + optimize
-                lss.backward()
-                optimizer.step()
-
-                # running sum
-                epoch_loss += lss.item()
-                postfix = f'Training loss: {round(epoch_loss / (idx + 1), 4)}'
-                t_epoch.set_postfix_str(postfix)
-
+        # train
+        train(training, model, epoch, epochs, optimizer, loss)
+        # validate
         if validation is not None:
             test(validation, model, loss)
+
+
+def train(training, model, epoch=0, epochs=1, optimizer=None, loss=torch.nn.BCELoss()):
+    epoch_loss = 0.0
+    train_len = len(training)
+
+    with tqdm(enumerate(training), total=train_len, position=0) as t_epoch:
+        t_epoch.set_description("Epoch {:02}/{}".format(epoch + 1, epochs))
+        for idx, (tweet, label) in t_epoch:
+            # zero the parameter gradients
+            optimizer.zero_grad()
+            model.zero_grad()
+
+            # forward pass
+            prediction = model(tweet)
+            # calculate loss
+            lss = loss(prediction.squeeze(), label.float())
+            # backward + optimize
+            lss.backward()
+            optimizer.step()
+
+            # running sum
+            epoch_loss += lss.item()
+            postfix = f'Training loss: {round(epoch_loss / (idx + 1), 4)}'
+            t_epoch.set_postfix_str(postfix)
 
 
 def test(testing, model, loss=torch.nn.BCELoss()):
@@ -105,7 +113,7 @@ if __name__ == '__main__':
     opt = Adam(mod.parameters(), lr=args.lr)
 
     print('Training...')
-    train(training=train_set, model=mod, validation=val_set, optimizer=opt, loss=torch.nn.BCELoss(), epochs=args.epochs)
+    fit(training=train_set, model=mod, validation=val_set, optimizer=opt, loss=torch.nn.BCELoss(), epochs=args.epochs)
 
     # Saving model
     print('Saving model...')
