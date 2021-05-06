@@ -66,12 +66,14 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_path', type=str, default='./train.csv', help='training file path')
-    parser.add_argument('--validation_path', type=str, default=None, help='validation file path')
-    parser.add_argument('--batch_size', type=int, default=64, help='training set batch size')
+    parser.add_argument('--validation_count', type=str, default=1_000, help='number of inputs to save for validation')
+    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
+    parser.add_argument('--lr', type=int, default=0.01, help='learning rate')
+    parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
     parser.add_argument('--max_vocab', type=int, default=10_000, help='maximum vocab size')
-    parser.add_argument('--embedding_dim', type=int, default=6, help='size of embedding dim')
-    parser.add_argument('--hidden_dim', type=int, default=6, help='size of hidden layer')
-    parser.add_argument('--save_path', type=str, default='./output.labels', help='file path for saved_model')
+    parser.add_argument('--embedding_dim', type=int, default=6, help='embedding dimension size')
+    parser.add_argument('--hidden_dim', type=int, default=6, help='hidden layer size')
+    parser.add_argument('--save_path', type=str, default='./trained_model.pkl', help='file path for saved_model')
     return parser.parse_args()
 
 
@@ -90,7 +92,7 @@ if __name__ == '__main__':
     preprocessor.save()
 
     # validation split
-    data.split_data(validation_count=10_000)
+    data.split_data(validation_count=args.validation_count)
     train_ds, val_ds = data.to_dataset()
 
     # to dataLoaders
@@ -99,13 +101,13 @@ if __name__ == '__main__':
 
     print('Initializing model...')
     mod = SentimentModel(len(preprocessor.vocab2enc)+3, args.embedding_dim, args.hidden_dim, args.batch_size)
-    opt = Adam(mod.parameters(), lr=0.01)
+    opt = Adam(mod.parameters(), lr=args.lr)
 
     print('Training...')
-    train(training=train_set, model=mod, validation=val_set, optimizer=opt, loss=torch.nn.BCELoss())
+    train(training=train_set, model=mod, validation=val_set, optimizer=opt, loss=torch.nn.BCELoss(), epochs=args.epochs)
 
     # Saving model
     print('Saving model...')
-    torch.save(mod, './trained_model.pkl')
+    torch.save(mod, args.save_path)
 
     print('Done!')
