@@ -1,7 +1,6 @@
 from torch.nn import Module
 import torch.nn as nn
 from torch import sigmoid
-import torch
 
 
 class SentimentModel(Module):
