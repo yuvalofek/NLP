@@ -27,15 +27,15 @@ class SentimentDataset:
         return self.data, self.validation
 
     def to_dataset(self):
-        # to separate arrays
-        train_x, train_y = [item[1] for item in self.data], [item[0] for item in self.data]
-        train_x = np.array(train_x)
-        tr_ds = TensorDataset(torch.tensor(train_x, dtype=torch.long), torch.FloatTensor(train_y))
-
+        tr_ds = self.extract_from_list(self.data)
         val_ds = None
         if self.validation is not None:
-            val_x, val_y = [item[1] for item in self.validation], [item[0] for item in self.validation]
-            val_x = np.array(val_x)
-            val_ds = TensorDataset(torch.tensor(val_x, dtype=torch.long), torch.FloatTensor(val_y))
-
+            val_ds = self.extract_from_list(self.validation)
         return tr_ds, val_ds
+
+    @staticmethod
+    def extract_from_list(dataset):
+        x, y = [item[1] for item in dataset], [item[0] for item in dataset]
+        x = np.array(x)
+        ds = TensorDataset(torch.tensor(x, dtype=torch.long), torch.FloatTensor(y))
+        return ds
