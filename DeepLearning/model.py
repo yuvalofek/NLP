@@ -1,15 +1,16 @@
 from torch.nn import Module
 import torch.nn as nn
 from torch import sigmoid
+import torch
 
 
 class SentimentModel(Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, batch_size):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, dropout=0.5):
         super(SentimentModel, self).__init__()
 
         self.word_embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(embedding_dim, hidden_dim)
-        self.l1 = nn.Linear(hidden_dim, 1)
+        self.lstm = nn.LSTM(embedding_dim, hidden_dim, bidirectional=True, dropout=dropout)
+        self.l1 = nn.Linear(hidden_dim*2, 1)
 
     def forward(self, x):
         batch_size = x.size()
