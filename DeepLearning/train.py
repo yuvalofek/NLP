@@ -1,9 +1,10 @@
 import argparse
-from tqdm import tqdm
 import torch
+import numpy as np
+
+from tqdm import tqdm
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-import numpy as np
 
 from data import SentimentDataset
 from prepro import Preprocessor
@@ -56,7 +57,7 @@ def test(testing, model, loss=torch.nn.BCELoss()):
             # running sum
             epoch_loss += lss.item()
             acc_tot += acc
-            postfix = f'Validation loss: {round(epoch_loss / (idx + 1), 4)} Accuracy: {round(acc_tot / (idx + 1)*100, 3)}%'
+            postfix = f'Loss: {round(epoch_loss / (idx + 1), 4)} Accuracy: {round(acc_tot / (idx + 1)*100, 3)}%'
             t_epoch.set_postfix_str(postfix)
 
 
@@ -67,10 +68,10 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_path', type=str, default='./train.csv', help='training file path')
     parser.add_argument('--validation_count', type=str, default=1_000, help='number of inputs to save for validation')
-    parser.add_argument('--batch_size', type=int, default=64, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=int, default=0.01, help='learning rate')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
-    parser.add_argument('--max_vocab', type=int, default=10_000, help='maximum vocab size')
+    parser.add_argument('--max_vocab', type=int, default=5_000, help='maximum vocab size')
     parser.add_argument('--embedding_dim', type=int, default=6, help='embedding dimension size')
     parser.add_argument('--hidden_dim', type=int, default=6, help='hidden layer size')
     parser.add_argument('--save_path', type=str, default='./trained_model.pkl', help='file path for saved_model')
