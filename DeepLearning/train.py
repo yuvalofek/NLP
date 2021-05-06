@@ -83,7 +83,9 @@ def get_args():
     parser.add_argument('--max_vocab', type=int, default=5_000, help='maximum vocab size')
     parser.add_argument('--embedding_dim', type=int, default=6, help='embedding dimension size')
     parser.add_argument('--hidden_dim', type=int, default=6, help='hidden layer size')
-    parser.add_argument('--save_path', type=str, default='./trained_model.pkl', help='file path for saved_model')
+    parser.add_argument('--model_save_path', type=str, default='./trained_model.pkl', help='file path for saved model')
+    parser.add_argument('--prepro_save_path', type=str, default='./prepro_vocab.json',
+                        help='file path for saved preprocessor')
     return parser.parse_args()
 
 
@@ -99,7 +101,7 @@ if __name__ == '__main__':
     # preprocess and save word encodings
     preprocessor = Preprocessor(max_vocab=args.max_vocab)
     data = preprocessor.fit_transform(dataset=data)
-    preprocessor.save()
+    preprocessor.save(args.prepro_save_path)
 
     # validation split
     data.split_data(validation_count=args.validation_count)
@@ -118,6 +120,6 @@ if __name__ == '__main__':
 
     # Saving model
     print('Saving model...')
-    torch.save(mod, args.save_path)
+    torch.save(mod, args.model_save_path)
 
     print('Done!')

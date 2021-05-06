@@ -16,6 +16,7 @@ def get_args():
     parser.add_argument('--test_path', type=str, default='./train.csv', help='training file path')
     parser.add_argument('--max_vocab', type=int, default=5_000, help='maximum vocab size')
     parser.add_argument('--model_path', type=str, default='./trained_model.pkl', help='path to trained model')
+    parser.add_argument('--prepro_path', type=str, default='./prepro_vocab.json', help='path to fit preprocessor')
     return parser.parse_args()
 
 
@@ -29,9 +30,10 @@ if __name__ == '__main__':
     data = SentimentDataset(data=args.test_path)
 
     # preprocess and save word encodings
+
     preprocessor = Preprocessor(max_vocab=args.max_vocab)
-    data = preprocessor.fit_transform(dataset=data)
-    preprocessor.save()
+    preprocessor.load()
+    data = preprocessor.transform(dataset=data)
 
     # validation split
     test_ds, _ = data.to_dataset()
