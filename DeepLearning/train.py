@@ -17,12 +17,19 @@ def fit(training, model, validation=None, optimizer=None, loss=torch.nn.BCELoss(
         optimizer = Adam(model.parameters(), lr=0.01)
 
     # fit the model!
+    train_loss = []
+    val_loss = []
+    val_acc = []
     for epoch in range(epochs):
         # train
-        train(training, model, optimizer, loss, epoch, epochs)
+        tr_loss = train(training, model, optimizer, loss, epoch, epochs)
+        train_loss.append(tr_loss)
         # validate
         if validation is not None:
-            test(validation, model, loss)
+            lss, acc = test(validation, model, loss)
+            val_loss.append(lss)
+            val_acc.append(acc)
+    return train_loss if validation is None else (train_loss, val_loss, val_acc)
 
 
 def train(training, model, optimizer, loss, epoch=0, epochs=1):
@@ -48,6 +55,7 @@ def train(training, model, optimizer, loss, epoch=0, epochs=1):
             epoch_loss += lss.item()
             postfix = f'Training loss: {round(epoch_loss / (idx + 1), 4)}'
             t_epoch.set_postfix_str(postfix)
+    return epoch_loss
 
 
 def test(testing, model, loss=torch.nn.BCELoss()):
@@ -68,6 +76,7 @@ def test(testing, model, loss=torch.nn.BCELoss()):
             acc_tot += acc
             postfix = f'Loss: {round(epoch_loss / (idx + 1), 4)} Accuracy: {round(acc_tot / (idx + 1)*100, 3)}%'
             t_epoch.set_postfix_str(postfix)
+    return epoch_loss, acc_tot
 
 
 def get_args():
@@ -76,9 +85,9 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_path', type=str, default='./train.csv', help='training file path')
-    parser.add_argument('--validation_count', type=str, default=10_000, help='number of inputs to save for validation')
+    parser.add_argument('--validation_count', type=int, default=1_000, help='number of inputs to save for validation')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
-    parser.add_argument('--lr', type=int, default=0.01, help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
     parser.add_argument('--max_vocab', type=int, default=5_000, help='maximum vocab size')
     parser.add_argument('--embedding_dim', type=int, default=6, help='embedding dimension size')
@@ -112,7 +121,7 @@ if __name__ == '__main__':
     val_set = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
 
     print('Initializing model...')
-    mod = SentimentModel(len(preprocessor.vocab2enc)+3, args.embedding_dim, args.hidden_dim, args.batch_size)
+    mod = SentimentModel(len(preprocessor.vocab2enc)+3, args.embedding_dim, args.hidden_dim)
     opt = Adam(mod.parameters(), lr=args.lr)
 
     print('Training...')
