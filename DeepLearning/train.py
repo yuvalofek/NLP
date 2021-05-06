@@ -58,12 +58,12 @@ def train(training, model, optimizer, loss, epoch=0, epochs=1):
     return epoch_loss
 
 
-def test(testing, model, loss=torch.nn.BCELoss()):
+def test(testing, model, loss=torch.nn.BCELoss(), val=True):
     test_len = len(testing)
     epoch_loss = 0.0
     acc_tot = 0.0
     with tqdm(enumerate(testing), total=test_len, position=0) as t_epoch:
-        t_epoch.set_description("Validation ")
+        t_epoch.set_description("Validation " if val else 'Testing')
         for idx, (tweet, label) in t_epoch:
             # forward pass
             prediction = model(tweet)

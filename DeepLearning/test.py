@@ -46,4 +46,4 @@ if __name__ == '__main__':
     model = torch.load(args.model_path)
     model.eval()
 
-    test(test_set, model)
+    test(test_set, model, val=False)
