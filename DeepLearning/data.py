@@ -1,19 +1,41 @@
-from torch.utils.data import Dataset
+import torch
+from torch.utils.data import TensorDataset
+import numpy as np
 import pandas as pd
 import logging
 
 
-class SentimentDataset(Dataset):
-    def __init__(self, dataset_path=None, data=None, validation=0.0):
-        super(SentimentDataset, self).__init__()
-        if dataset_path is not None:
-            self.dataset = pd.read_csv(dataset_path).values.tolist()
+class SentimentDataset:
+    def __init__(self, data, data_from_file=True):
+        if data_from_file:
+            self.data = pd.read_csv(data).values.tolist()
         else:
-            self.dataset = data
+            self.data = data
         logging.info('Dataset Created')
+        self.validation = None
 
-    def __getitem__(self, index):
-        return self.dataset[index]
+    def getitem(self, index):
+        return self.data[index]
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.data)
+
+    def split_data(self, validation_count):
+        # training set, validation set
+        self.validation = self.data[:validation_count]
+        self.data = self.data[validation_count:]
+        return self.data, self.validation
+
+    def to_dataset(self):
+        tr_ds = self.extract_from_list(self.data)
+        val_ds = None
+        if self.validation is not None:
+            val_ds = self.extract_from_list(self.validation)
+        return tr_ds, val_ds
+
+    @staticmethod
+    def extract_from_list(dataset):
+        x, y = [item[1] for item in dataset], [item[0] for item in dataset]
+        x = np.array(x)
+        ds = TensorDataset(torch.tensor(x, dtype=torch.long), torch.FloatTensor(y))
+        return ds
