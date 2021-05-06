@@ -85,13 +85,13 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_path', type=str, default='./train.csv', help='training file path')
-    parser.add_argument('--validation_count', type=int, default=1_000, help='number of inputs to save for validation')
+    parser.add_argument('--validation_count', type=int, default=5_000, help='number of inputs to save for validation')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-    parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
+    parser.add_argument('--epochs', type=int, default=30, help='number of epochs to train')
     parser.add_argument('--max_vocab', type=int, default=5_000, help='maximum vocab size')
-    parser.add_argument('--embedding_dim', type=int, default=6, help='embedding dimension size')
-    parser.add_argument('--hidden_dim', type=int, default=6, help='hidden layer size')
+    parser.add_argument('--embedding_dim', type=int, default=8, help='embedding dimension size')
+    parser.add_argument('--hidden_dim', type=int, default=8, help='hidden layer size')
     parser.add_argument('--model_save_path', type=str, default='./trained_model.pkl', help='file path for saved model')
     parser.add_argument('--prepro_save_path', type=str, default='./prepro_vocab.json',
                         help='file path for saved preprocessor')
