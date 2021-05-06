@@ -16,15 +16,16 @@ def fit(training, model, validation=None, optimizer=None, loss=torch.nn.BCELoss(
     if optimizer is None:
         optimizer = Adam(model.parameters(), lr=0.01)
 
+    # fit the model!
     for epoch in range(epochs):
         # train
-        train(training, model, epoch, epochs, optimizer, loss)
+        train(training, model, optimizer, loss, epoch, epochs)
         # validate
         if validation is not None:
             test(validation, model, loss)
 
 
-def train(training, model, epoch=0, epochs=1, optimizer=None, loss=torch.nn.BCELoss()):
+def train(training, model, optimizer, loss, epoch=0, epochs=1):
     epoch_loss = 0.0
     train_len = len(training)
 
@@ -75,7 +76,7 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
     parser.add_argument('--train_path', type=str, default='./train.csv', help='training file path')
-    parser.add_argument('--validation_count', type=str, default=1_000, help='number of inputs to save for validation')
+    parser.add_argument('--validation_count', type=str, default=10_000, help='number of inputs to save for validation')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=int, default=0.01, help='learning rate')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train')
