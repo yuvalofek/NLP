@@ -2,7 +2,6 @@ import torch
 from torch.utils.data import TensorDataset
 import numpy as np
 import pandas as pd
-import logging
 
 
 class SentimentDataset:
@@ -11,7 +10,6 @@ class SentimentDataset:
             self.data = pd.read_csv(data).values.tolist()
         else:
             self.data = data
-        logging.info('Dataset Created')
         self.validation = None
 
     def getitem(self, index):
