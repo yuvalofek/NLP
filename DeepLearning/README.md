@@ -1,5 +1,7 @@
 # Deep Learning for Sentiment Analysis
-Project guidlines can be found here: [link](http://faculty.cooper.edu/sable2/courses/spring2021/ece467/NLP_Spring21_PS3.docx)
+Project guidlines: [link](http://faculty.cooper.edu/sable2/courses/spring2021/ece467/NLP_Spring21_PS3.docx)
+
+Original dataset: [dataset](https://www.kaggle.com/kazanova/sentiment140)
 
 ## TLDR:
 * Use any deep learning framework to implement a deep learning NLP project
